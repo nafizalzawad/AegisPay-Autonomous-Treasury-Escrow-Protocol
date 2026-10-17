@@ -8,6 +8,16 @@ export interface ApiResponse<T> {
   detail?: string;
 }
 
+export interface HealthResponse {
+  ok: boolean;
+  chain_connected: boolean;
+  chain_id: number;
+  vault_address: string;
+  total_balance_usdc: number;
+  escrow_count: number;
+  llm_mode: string;
+}
+
 export interface WhitelistedRecipient {
   address: string;
   label: string;

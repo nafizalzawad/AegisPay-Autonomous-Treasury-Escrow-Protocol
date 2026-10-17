@@ -1,14 +1,14 @@
 {
   "chainId": 31337,
   "network": "anvil",
-  "deployedAt": 1792249466,
+  "deployedAt": 1792250020,
   "contracts": {
-    "mockUsdc": "0x6F6f570F45833E249e27022648a26F4076F48f78",
-    "aegisVault": "0xCA8c8688914e0F7096c920146cd0Ad85cD7Ae8b9",
-    "milestoneEscrow": "0xB0f05d25e41FbC2b52013099ED9616f1206Ae21B",
-    "MockUSDC": "0x6F6f570F45833E249e27022648a26F4076F48f78",
-    "AegisVault": "0xCA8c8688914e0F7096c920146cd0Ad85cD7Ae8b9",
-    "MilestoneEscrow": "0xB0f05d25e41FbC2b52013099ED9616f1206Ae21B"
+    "mockUsdc": "0xcE0066b1008237625dDDBE4a751827de037E53D2",
+    "aegisVault": "0x82EdA215Fa92B45a3a76837C65Ab862b6C7564a8",
+    "milestoneEscrow": "0x87006e75a5B6bE9D1bbF61AC8Cd84f05D9140589",
+    "MockUSDC": "0xcE0066b1008237625dDDBE4a751827de037E53D2",
+    "AegisVault": "0x82EdA215Fa92B45a3a76837C65Ab862b6C7564a8",
+    "MilestoneEscrow": "0x87006e75a5B6bE9D1bbF61AC8Cd84f05D9140589"
   },
   "accounts": {
     "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",

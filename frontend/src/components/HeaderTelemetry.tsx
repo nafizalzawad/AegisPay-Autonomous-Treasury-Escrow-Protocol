@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { VaultStateResponse } from "../types/api";
+import React, { useState, useEffect } from "react";
+import { VaultStateResponse, HealthResponse } from "../types/api";
 import { apiClient } from "../services/apiClient";
 import {
   Shield,
@@ -10,6 +10,13 @@ import {
   RotateCcw,
   Check,
   Copy,
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  KeyRound,
+  FileText,
+  GitPullRequest,
+  Flame,
 } from "lucide-react";
 
 interface HeaderTelemetryProps {
@@ -26,13 +33,41 @@ export const HeaderTelemetry: React.FC<HeaderTelemetryProps> = ({
   const [resetting, setResetting] = useState(false);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [backendLive, setBackendLive] = useState<boolean>(true);
+  const [showGuide, setShowGuide] = useState<boolean>(false);
+
+  // Poll system health every 5 seconds
+  useEffect(() => {
+    let mounted = true;
+    const checkHealth = async () => {
+      try {
+        const res = await apiClient.getHealth();
+        if (mounted) {
+          setHealth(res);
+          setBackendLive(res.ok && res.chain_connected);
+        }
+      } catch {
+        if (mounted) {
+          setBackendLive(false);
+        }
+      }
+    };
+
+    checkHealth();
+    const interval = setInterval(checkHealth, 5000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const handleResetDemo = async () => {
     try {
       setResetting(true);
       setResetMessage(null);
       await apiClient.resetDemoState();
-      setResetMessage("Sandbox successfully reset to initial seed state!");
+      setResetMessage("Sandbox reset to initial seed state!");
       onRefresh();
       setTimeout(() => setResetMessage(null), 4000);
     } catch (err: unknown) {
@@ -53,8 +88,23 @@ export const HeaderTelemetry: React.FC<HeaderTelemetryProps> = ({
     return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
   };
 
+  const agentSessionKey = vault?.policy?.session_key_address || "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* Reconnection Banner if Backend Unreachable */}
+      {!backendLive && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 flex items-center justify-between animate-pulse">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+            <span className="font-semibold">
+              Connecting to AegisPay Backend Relayer... Retrying connection at http://127.0.0.1:8000
+            </span>
+          </div>
+          <span className="font-mono text-[11px] text-amber-700">Auto-Reconnecting</span>
+        </div>
+      )}
+
       {/* Top Navigation Bar */}
       <header className="rounded-xl border border-slate-800 bg-slate-900 px-6 py-4 text-white shadow-md">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -71,10 +121,20 @@ export const HeaderTelemetry: React.FC<HeaderTelemetryProps> = ({
                     Topic F: Agent Wallet
                   </span>
                 </h1>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-400 border border-emerald-500/20">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Live Guardrails Enforced
-                </span>
+
+                {/* Live Health Badge */}
+                {backendLive ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-400 border border-emerald-500/20">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Live Guardrails Enforced (Chain ID: {health?.chain_id ?? 31337})
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/10 px-2.5 py-0.5 text-xs font-medium text-rose-400 border border-rose-500/20">
+                    <span className="h-1.5 w-1.5 rounded-full bg-rose-400 animate-ping" />
+                    Relayer Syncing
+                  </span>
+                )}
+
                 <span className="rounded-md bg-slate-800 px-2 py-0.5 text-xs font-mono text-slate-300 border border-slate-700">
                   ERC-4337 Smart Account
                 </span>
@@ -89,8 +149,8 @@ export const HeaderTelemetry: React.FC<HeaderTelemetryProps> = ({
             </div>
           </div>
 
-          {/* Network Info & Reset Button */}
-          <div className="flex flex-wrap items-center gap-3">
+          {/* Account Pills & Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2.5">
             {resetMessage && (
               <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 px-3 py-1.5 text-xs font-medium text-emerald-300 animate-fade-in">
                 <Check className="h-3.5 w-3.5 text-emerald-400" />
@@ -100,7 +160,7 @@ export const HeaderTelemetry: React.FC<HeaderTelemetryProps> = ({
 
             {/* Live Vault Account Pill */}
             {vault?.vault_address && (
-              <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-mono text-slate-300">
+              <div className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1.5 text-xs font-mono text-slate-300">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
                 <span className="text-slate-400">Vault:</span>
                 <span>{formatAddress(vault.vault_address)}</span>
@@ -118,6 +178,38 @@ export const HeaderTelemetry: React.FC<HeaderTelemetryProps> = ({
               </div>
             )}
 
+            {/* Live Session Key Pill */}
+            <div className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1.5 text-xs font-mono text-slate-300">
+              <KeyRound className="h-3 w-3 text-cyan-400" />
+              <span className="text-slate-400">Agent Key:</span>
+              <span>{formatAddress(agentSessionKey)}</span>
+              <button
+                onClick={() => copyToClipboard(agentSessionKey, "agentKey")}
+                className="text-slate-400 hover:text-white"
+                title="Copy Agent Session Key Address"
+              >
+                {copied === "agentKey" ? (
+                  <Check className="h-3 w-3 text-emerald-400" />
+                ) : (
+                  <Copy className="h-3 w-3" />
+                )}
+              </button>
+            </div>
+
+            {/* Demo Quick-Guide Toggle Button */}
+            <button
+              onClick={() => setShowGuide(!showGuide)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 hover:text-white"
+              title="Toggle Live Demo Walkthrough Guide"
+            >
+              <span>Demo Quick-Guide</span>
+              {showGuide ? (
+                <ChevronUp className="h-3.5 w-3.5 text-blue-400" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5 text-blue-400" />
+              )}
+            </button>
+
             {/* Reset Demo Button */}
             <button
               onClick={handleResetDemo}
@@ -128,10 +220,68 @@ export const HeaderTelemetry: React.FC<HeaderTelemetryProps> = ({
               <RotateCcw
                 className={`h-3.5 w-3.5 text-blue-400 ${resetting ? "animate-spin" : ""}`}
               />
-              <span>{resetting ? "Resetting Sandbox..." : "Reset Demo State"}</span>
+              <span>{resetting ? "Resetting..." : "Reset Sandbox"}</span>
             </button>
           </div>
         </div>
+
+        {/* Collapsible Demo Mode Quick-Guide */}
+        {showGuide && (
+          <div className="mt-4 pt-4 border-t border-slate-800 animate-fade-in">
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-xs font-bold text-blue-300 uppercase tracking-wider">
+                Judging Walkthrough — 3-Step Autonomous Loop
+              </span>
+              <span className="text-[11px] font-mono text-slate-400">
+                Topic F: Autonomous On-Chain Agent Wallet
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              {/* Step 1 */}
+              <div className="rounded-lg bg-slate-800/90 border border-slate-700 p-3">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="rounded bg-blue-900 text-blue-300 px-1.5 py-0.5 font-bold font-mono text-[10px]">
+                    STEP 1
+                  </span>
+                  <FileText className="h-3.5 w-3.5 text-blue-400" />
+                  <span className="font-bold text-white">Commercial Intent</span>
+                </div>
+                <p className="text-slate-300 text-[11px] leading-relaxed">
+                  Select Preset 1 in the Terminal. Click <strong>Simulate</strong> to test the 5-point firewall and EVM dry-run, then click <strong>Authorize & Execute</strong> to fund the milestone escrow on-chain.
+                </p>
+              </div>
+
+              {/* Step 2 */}
+              <div className="rounded-lg bg-slate-800/90 border border-slate-700 p-3">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="rounded bg-emerald-900 text-emerald-300 px-1.5 py-0.5 font-bold font-mono text-[10px]">
+                    STEP 2
+                  </span>
+                  <GitPullRequest className="h-3.5 w-3.5 text-emerald-400" />
+                  <span className="font-bold text-white">Perception & Settlement</span>
+                </div>
+                <p className="text-slate-300 text-[11px] leading-relaxed">
+                  Click <strong>Simulate Passing GitHub CI Webhook</strong>. The Agent computes a SHA-256 attestation, signs settlement via Session Key, releases 85% ($1,020) to DevStudio, and isolates 15% ($180) into Tax Reserve.
+                </p>
+              </div>
+
+              {/* Step 3 */}
+              <div className="rounded-lg bg-slate-800/90 border border-slate-700 p-3">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="rounded bg-rose-900 text-rose-300 px-1.5 py-0.5 font-bold font-mono text-[10px]">
+                    STEP 3
+                  </span>
+                  <Flame className="h-3.5 w-3.5 text-rose-400" />
+                  <span className="font-bold text-white">Red-Team Defense</span>
+                </div>
+                <p className="text-slate-300 text-[11px] leading-relaxed">
+                  Fire any of the 3 Red-Team attacks in the Arena (Prompt Injection, Shadow Phishing, Infinite Approve). Both off-chain firewall and Solidity smart account reject the attack with <strong>$0.00 loss</strong>.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* 4 KPI Telemetry Cards */}

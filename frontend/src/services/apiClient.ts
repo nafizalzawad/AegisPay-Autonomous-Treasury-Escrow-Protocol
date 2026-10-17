@@ -6,6 +6,7 @@ import {
   RedTeamScenario,
   RedTeamAttackResponse,
   VerifyWebhookResponse,
+  HealthResponse,
 } from "../types/api";
 
 const BASE_URL = "/api/v1";
@@ -40,6 +41,10 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
 }
 
 export const apiClient = {
+  // System Health
+  getHealth: (): Promise<HealthResponse> =>
+    request<HealthResponse>("/health"),
+
   // Vault & Policy
   getVaultState: (): Promise<VaultStateResponse> =>
     request<VaultStateResponse>("/vault/state"),

@@ -71,11 +71,25 @@ async def health_v1():
     deps = settings.load_deployments()
     contracts = deps.get("contracts", {})
     vault_addr = contracts.get("AegisVault") or contracts.get("aegisVault") or ""
+    connected = blockchain_service.is_connected()
+    total_balance_usdc = 0.0
+    escrow_count = 0
+    if connected and vault_addr:
+        try:
+            state = blockchain_service.get_vault_state()
+            total_balance_usdc = state.total_balance_usdc
+            escrows = blockchain_service.list_escrows()
+            escrow_count = len(escrows)
+        except Exception:
+            pass
+
     return {
         "ok": True,
-        "chain_connected": blockchain_service.is_connected(),
+        "chain_connected": connected,
         "chain_id": settings.CHAIN_ID,
         "vault_address": vault_addr,
+        "total_balance_usdc": total_balance_usdc,
+        "escrow_count": escrow_count,
         "llm_mode": settings.LLM_PROVIDER,
     }
 

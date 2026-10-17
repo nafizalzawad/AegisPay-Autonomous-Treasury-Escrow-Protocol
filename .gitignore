@@ -54,3 +54,8 @@ contracts/broadcast/
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs & PIDs
+.logs/
+*.log
+*.pid
