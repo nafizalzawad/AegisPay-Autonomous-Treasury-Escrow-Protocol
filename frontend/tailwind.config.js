@@ -6,22 +6,13 @@ export default {
   ],
   theme: {
     extend: {
-      colors: {
-        aegis: {
-          950: "#090d16",
-          900: "#0f172a",
-          850: "#131d35",
-          800: "#1e293b",
-          700: "#334155",
-          accent: "#06b6d4",
-          success: "#10b981",
-          warning: "#f59e0b",
-          danger: "#f43f5e",
-        }
-      },
       fontFamily: {
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['Inter', 'Plus Jakarta Sans', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+      },
+      boxShadow: {
+        'subtle': '0 1px 2px 0 rgba(15, 23, 42, 0.04)',
+        'card': '0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.06)',
       }
     },
   },

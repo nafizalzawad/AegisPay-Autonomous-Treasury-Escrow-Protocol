@@ -1,15 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
 import { AuditEventDTO } from "../types/api";
+import { Skeleton } from "./Skeleton";
 import {
-  History,
-  CheckCircle2,
-  AlertOctagon,
-  AlertTriangle,
-  Info,
-  ShieldAlert,
-  KeyRound,
-  GitPullRequest,
-  Terminal,
+  Copy,
+  Check,
 } from "lucide-react";
 
 interface AuditTrailFeedProps {
@@ -17,52 +11,13 @@ interface AuditTrailFeedProps {
   loading?: boolean;
 }
 
-export const AuditTrailFeed: React.FC<AuditTrailFeedProps> = ({ events, loading }) => {
-  const getSeverityBadge = (severity: string) => {
-    switch (severity.toUpperCase()) {
-      case "CRITICAL":
-        return (
-          <span className="inline-flex items-center gap-1 rounded bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700 border border-rose-200">
-            <AlertOctagon className="h-3 w-3" />
-            CRITICAL BLOCKED
-          </span>
-        );
-      case "WARNING":
-        return (
-          <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 border border-amber-200">
-            <AlertTriangle className="h-3 w-3" />
-            WARNING
-          </span>
-        );
-      case "SUCCESS":
-        return (
-          <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
-            <CheckCircle2 className="h-3 w-3" />
-            SUCCESS
-          </span>
-        );
-      case "INFO":
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700 border border-slate-200">
-            <Info className="h-3 w-3" />
-            INFO
-          </span>
-        );
-    }
-  };
+export const AuditTrailFeed: React.FC<AuditTrailFeedProps> = ({ events, loading = false }) => {
+  const [copiedTx, setCopiedTx] = useState<string | null>(null);
 
-  const getEventIcon = (eventType: string) => {
-    if (eventType.includes("FIREWALL") || eventType.includes("REVERT")) {
-      return <ShieldAlert className="h-3.5 w-3.5 text-rose-600" />;
-    }
-    if (eventType.includes("ESCROW_CREATED")) {
-      return <KeyRound className="h-3.5 w-3.5 text-blue-600" />;
-    }
-    if (eventType.includes("WEBHOOK") || eventType.includes("ESCROW_SETTLED")) {
-      return <GitPullRequest className="h-3.5 w-3.5 text-emerald-600" />;
-    }
-    return <Terminal className="h-3.5 w-3.5 text-slate-500" />;
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedTx(id);
+    setTimeout(() => setCopiedTx(null), 2000);
   };
 
   const formatTimestamp = (ts: string) => {
@@ -75,72 +30,138 @@ export const AuditTrailFeed: React.FC<AuditTrailFeedProps> = ({ events, loading 
     }
   };
 
+  const getStatusBadge = (severity: string) => {
+    const sev = severity.toUpperCase();
+    if (sev === "CRITICAL" || sev === "DANGER") {
+      return (
+        <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+          <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+          BLOCKED
+        </span>
+      );
+    }
+    if (sev === "WARNING") {
+      return (
+        <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+          WARNING
+        </span>
+      );
+    }
+    if (sev === "SUCCESS") {
+      return (
+        <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          SUCCESS
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 font-mono text-[10px] font-medium text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">
+        INFO
+      </span>
+    );
+  };
+
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
-            <History className="h-5 w-5" />
-          </div>
-          <div>
-            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              On-Chain & Perception Audit Trail
-              <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-mono text-slate-700 border border-slate-200">
-                Immutable Ledger
-              </span>
-            </h2>
-            <p className="text-xs text-slate-500">
-              Chronological log of agent reasoning, firewall interceptions, and smart contract settlements
-            </p>
-          </div>
+    <div className="rounded-lg border border-slate-200 bg-white shadow-subtle overflow-hidden">
+      {/* Table Header / Title */}
+      <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900 tracking-tight flex items-center gap-2">
+            Immutable Telemetry & Security Audit Ledger
+          </h2>
+          <p className="text-xs text-slate-500">
+            Chronological cryptographic log of agent perceptions, pre-execution firewall blocks, and on-chain settlements
+          </p>
         </div>
 
-        <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600 border border-slate-200">
-          {events.length} Records
+        <span className="font-mono text-[11px] text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded self-start sm:self-center">
+          {events.length} Recorded Events
         </span>
       </div>
 
-      {/* Events Feed */}
-      <div className="mt-4 max-h-80 overflow-y-auto space-y-2 pr-1 font-sans">
-        {events.length === 0 ? (
-          <div className="py-8 text-center text-xs text-slate-500 font-mono">
-            {loading ? "Loading audit records..." : "No audit records recorded yet."}
-          </div>
-        ) : (
-          events.map((ev) => (
-            <div
-              key={ev.id}
-              className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 text-xs transition-all hover:bg-slate-50 hover:border-slate-300 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
-            >
-              <div className="flex items-start gap-2.5">
-                <span className="mt-0.5 shrink-0">{getEventIcon(ev.event_type)}</span>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-slate-900 font-mono">
-                      {ev.event_type}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono">
-                      {formatTimestamp(ev.timestamp)}
-                    </span>
-                  </div>
-                  <p className="text-slate-700 text-xs mt-0.5">
-                    {ev.summary}
-                  </p>
-                </div>
-              </div>
+      {/* High-Density Financial Event Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-xs">
+          <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-mono text-[11px] uppercase tracking-wider">
+            <tr>
+              <th className="py-2.5 px-4 font-medium whitespace-nowrap">Time (UTC)</th>
+              <th className="py-2.5 px-4 font-medium whitespace-nowrap">Event Type</th>
+              <th className="py-2.5 px-4 font-medium">Summary & Solidity Telemetry</th>
+              <th className="py-2.5 px-4 font-medium whitespace-nowrap">Tx Hash / Proof</th>
+              <th className="py-2.5 px-4 font-medium whitespace-nowrap text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 font-sans">
+            {loading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <tr key={i} className="animate-pulse">
+                  <td className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>
+                  <td className="py-3 px-4"><Skeleton className="h-4 w-28" /></td>
+                  <td className="py-3 px-4"><Skeleton className="h-4 w-64" /></td>
+                  <td className="py-3 px-4"><Skeleton className="h-4 w-20" /></td>
+                  <td className="py-3 px-4 text-right"><Skeleton className="h-4 w-16 ml-auto" /></td>
+                </tr>
+              ))
+            ) : events.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="py-8 text-center text-xs text-slate-500 font-mono">
+                  No audit records generated yet.
+                </td>
+              </tr>
+            ) : (
+              events.map((ev) => (
+                <tr
+                  key={ev.id}
+                  className="hover:bg-slate-50/70 transition-colors text-slate-800"
+                >
+                  {/* Timestamp */}
+                  <td className="py-2.5 px-4 font-mono text-[11px] text-slate-500 whitespace-nowrap tabular-nums">
+                    {formatTimestamp(ev.timestamp)}
+                  </td>
 
-              <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
-                {ev.tx_hash && (
-                  <span className="rounded bg-white px-2 py-0.5 text-[10px] font-mono text-blue-700 border border-slate-200 shadow-2xs">
-                    Tx: {ev.tx_hash.substring(0, 8)}...{ev.tx_hash.substring(ev.tx_hash.length - 4)}
-                  </span>
-                )}
-                {getSeverityBadge(ev.severity)}
-              </div>
-            </div>
-          ))
-        )}
+                  {/* Event Type */}
+                  <td className="py-2.5 px-4 font-mono text-[11px] font-semibold text-slate-900 whitespace-nowrap">
+                    {ev.event_type}
+                  </td>
+
+                  {/* Summary */}
+                  <td className="py-2.5 px-4 text-slate-700 max-w-md">
+                    <span className="line-clamp-2 leading-relaxed">{ev.summary}</span>
+                  </td>
+
+                  {/* Tx Hash */}
+                  <td className="py-2.5 px-4 font-mono text-[11px] whitespace-nowrap">
+                    {ev.tx_hash ? (
+                      <div className="flex items-center gap-1.5 text-blue-700 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded w-fit">
+                        <span>{ev.tx_hash.substring(0, 8)}...</span>
+                        <button
+                          onClick={() => copyToClipboard(ev.tx_hash!, ev.id)}
+                          className="text-slate-400 hover:text-slate-700 transition-colors"
+                          title="Copy Full Transaction Hash"
+                        >
+                          {copiedTx === ev.id ? (
+                            <Check className="h-3 w-3 text-emerald-600" />
+                          ) : (
+                            <Copy className="h-3 w-3" />
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-slate-400 font-mono text-[10px]">Off-Chain Event</span>
+                    )}
+                  </td>
+
+                  {/* Status Badge */}
+                  <td className="py-2.5 px-4 text-right whitespace-nowrap">
+                    {getStatusBadge(ev.severity)}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

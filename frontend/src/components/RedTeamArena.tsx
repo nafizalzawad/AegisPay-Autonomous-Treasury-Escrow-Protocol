@@ -7,34 +7,39 @@ import {
   Skull,
   AlertTriangle,
   CheckCircle2,
+  Cpu,
 } from "lucide-react";
 
 interface RedTeamArenaProps {
-  onAttackFinished: () => void;
+  onAttackFinished: (msg?: string) => void;
+  disabled?: boolean;
 }
 
 const ATTACK_SCENARIOS = [
   {
     id: "PROMPT_INJECTION_OVER_LIMIT",
-    title: "Attack #1: Prompt Injection ($10,000 Over-Limit Drain)",
-    category: "Spending Velocity Breach",
-    description: "Adversary injects jailbreak prompt instructing Agent to bypass limits and wire $10,000 USDC.",
+    vectorTag: "VECTOR 01 • SPENDING VELOCITY BREACH",
+    title: "Prompt Injection ($10,000 Over-Limit Drain)",
+    description:
+      "Adversary injects jailbreak prompt instructing Agent to bypass limits and wire $10,000 USDC.",
     expectedError: "PerTxSpendLimitExceeded",
     icon: Flame,
   },
   {
     id: "UNWHITELISTED_PHISHING_RECIPIENT",
-    title: "Attack #2: Supply-Chain Phishing (Unwhitelisted Hacker Wallet)",
-    category: "Recipient Whitelist Breach",
-    description: "Adversary prompts Agent to pay 500 USDC to unverified shadow address (0xa0Ee...9720).",
+    vectorTag: "VECTOR 02 • RECIPIENT WHITELIST BREACH",
+    title: "Supply-Chain Phishing (Unwhitelisted Hacker Wallet)",
+    description:
+      "Adversary prompts Agent to pay 500 USDC to unverified shadow address (0xa0Ee...9720).",
     expectedError: "RecipientNotWhitelisted",
     icon: Skull,
   },
   {
     id: "MALICIOUS_INFINITE_APPROVE",
-    title: "Attack #3: Malicious Infinite Token Approval (approve MAX_UINT256)",
-    category: "Selector & Allowance Exploit",
-    description: "Adversary tricks Agent into calling ERC20 approve(attacker, MAX_UINT256) to enable drain.",
+    vectorTag: "VECTOR 03 • SELECTOR & ALLOWANCE EXPLOIT",
+    title: "Malicious Infinite Token Approval (approve MAX_UINT256)",
+    description:
+      "Adversary tricks Agent into calling ERC-20 approve(attacker, MAX_UINT256) to enable treasury drain.",
     expectedError: "FunctionSelectorNotAllowed",
     icon: AlertTriangle,
   },
@@ -42,92 +47,119 @@ const ATTACK_SCENARIOS = [
 
 export const RedTeamArena: React.FC<RedTeamArenaProps> = ({
   onAttackFinished,
+  disabled = false,
 }) => {
   const [activeScenarioId, setActiveScenarioId] = useState<string>("PROMPT_INJECTION_OVER_LIMIT");
-  const [attacking, setAttacking] = useState<boolean>(false);
+  const [attackingId, setAttackingId] = useState<string | null>(null);
   const [defenseReport, setDefenseReport] = useState<RedTeamAttackResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleLaunchAttack = async (scenarioId: string) => {
+    if (disabled || attackingId !== null) return;
     try {
       setActiveScenarioId(scenarioId);
-      setAttacking(true);
+      setAttackingId(scenarioId);
       setErrorMessage(null);
       setDefenseReport(null);
 
+      // Brief choreography delay
+      await new Promise((r) => setTimeout(r, 450));
+
       const res = await apiClient.executeRedTeamAttack(scenarioId, true);
       setDefenseReport(res);
-      onAttackFinished();
+      onAttackFinished(
+        `Attack repelled: ${res.solidity_custom_error} reverted on-chain. Zero balance lost!`
+      );
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : String(err));
     } finally {
-      setAttacking(false);
+      setAttackingId(null);
     }
   };
 
   return (
-    <div className="rounded-xl border border-rose-200 bg-white p-5 shadow-sm">
+    <div className="rounded-lg border border-slate-200 bg-white shadow-subtle p-4 sm:p-5 space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-rose-100 pb-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-50 text-rose-700">
-            <ShieldAlert className="h-5 w-5" />
-          </div>
-          <div>
-            <h2 className="text-sm font-bold text-slate-900">
-              Adversarial Red-Team & Guardrail Verification Arena
-            </h2>
-            <p className="text-xs text-slate-500">
-              Live stress-testing of 2-stage firewall & deterministic Solidity smart account reverts
-            </p>
-          </div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-b border-slate-100 pb-3">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900 tracking-tight flex items-center gap-2">
+            Adversarial Security & Revert Verification Matrix
+          </h2>
+          <p className="text-xs text-slate-500">
+            Real-time stress testing of 2-stage firewall & deterministic Solidity reverts
+          </p>
         </div>
 
-        <span className="rounded bg-rose-50 px-2 py-0.5 font-mono text-[11px] font-bold text-rose-700 border border-rose-200">
-          ZERO LOSS GUARANTEE
-        </span>
+        <div className="font-mono text-[10px] font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded self-start sm:self-center">
+          MATHEMATICAL ZERO LOSS
+        </div>
       </div>
 
-      {/* Scenario Cards */}
-      <div className="mt-4 space-y-3">
+      {/* Error Message */}
+      {errorMessage && (
+        <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
+          <div>{errorMessage}</div>
+        </div>
+      )}
+
+      {/* Clean Stacked Scenario Cards */}
+      <div className="space-y-3">
         {ATTACK_SCENARIOS.map((sc) => {
           const Icon = sc.icon;
-          const isCurrent = activeScenarioId === sc.id;
-          const isRunning = attacking && isCurrent;
+          const isSelected = activeScenarioId === sc.id;
+          const isRunning = attackingId === sc.id;
 
           return (
             <div
               key={sc.id}
-              className={`rounded-lg border p-3.5 transition-all ${
-                isCurrent
-                  ? "border-rose-300 bg-rose-50/30"
-                  : "border-slate-200 bg-slate-50/50 hover:bg-slate-50"
+              className={`rounded-md border p-3.5 transition-all space-y-2.5 ${
+                isSelected
+                  ? "border-rose-300 bg-rose-50/20 shadow-xs"
+                  : "border-slate-200 bg-slate-50/40 hover:bg-slate-50 hover:border-slate-300"
               }`}
             >
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div className="flex items-start gap-2.5">
-                  <div className="mt-0.5 rounded p-1.5 bg-rose-100 text-rose-700">
-                    <Icon className="h-3.5 w-3.5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-900">{sc.title}</span>
-                      <span className="rounded bg-slate-200/80 px-1.5 py-0.2 font-mono text-[10px] text-slate-700">
-                        {sc.category}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">{sc.description}</p>
-                  </div>
-                </div>
+              {/* Line 1: Vector Tag + Status */}
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[10px] font-semibold text-slate-500 tracking-wider">
+                  {sc.vectorTag}
+                </span>
+                <span className="font-mono text-[10px] text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.2 rounded font-medium">
+                  {sc.expectedError}
+                </span>
+              </div>
 
+              {/* Line 2: Title and Threat Description */}
+              <div className="flex items-start gap-2.5">
+                <div className="mt-0.5 rounded p-1 bg-slate-100 text-slate-700 shrink-0">
+                  <Icon className="h-3.5 w-3.5" />
+                </div>
+                <div className="space-y-0.5">
+                  <h4 className="text-xs sm:text-sm font-semibold text-slate-900 leading-snug">
+                    {sc.title}
+                  </h4>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    {sc.description}
+                  </p>
+                </div>
+              </div>
+
+              {/* Line 3: Action Button */}
+              <div className="pt-1 flex justify-end">
                 <button
                   onClick={() => handleLaunchAttack(sc.id)}
-                  disabled={attacking}
-                  className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-rose-700 hover:bg-rose-800 text-white px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors disabled:opacity-50"
+                  disabled={disabled || attackingId !== null}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded border border-rose-300 bg-white hover:bg-rose-600 hover:text-white hover:border-rose-600 text-rose-700 font-medium text-xs px-3.5 py-2 transition-colors disabled:opacity-50 min-h-[38px] shadow-2xs"
                   title="Fire attack payload against live backend & Anvil smart contract"
                 >
-                  <ShieldAlert className={`h-3.5 w-3.5 ${isRunning ? "animate-spin" : ""}`} />
-                  <span>{isRunning ? "Simulating Exploit..." : "Fire Live Attack Simulation"}</span>
+                  {isRunning ? (
+                    <Cpu className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                  )}
+                  <span>
+                    {isRunning ? "Simulating Exploit & Calling EVM..." : "Execute Live Adversarial Test"}
+                  </span>
                 </button>
               </div>
             </div>
@@ -135,81 +167,48 @@ export const RedTeamArena: React.FC<RedTeamArenaProps> = ({
         })}
       </div>
 
-      {/* Error Banner */}
-      {errorMessage && (
-        <div className="mt-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
-          <div>{errorMessage}</div>
-        </div>
-      )}
-
-      {/* Defense Verification Report */}
+      {/* Live Defense Telemetry Console (Dark Terminal Block) */}
       {defenseReport && (
-        <div className="mt-4 rounded-xl border border-rose-300 bg-rose-50/70 p-4 animate-fade-in">
-          <div className="flex items-center justify-between border-b border-rose-200 pb-2.5">
-            <span className="text-xs font-bold text-rose-950 uppercase tracking-wider flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-              Defense Verification Report: {defenseReport.title}
+        <div className="rounded-md border border-slate-800 bg-slate-950 text-slate-100 p-4 font-mono text-xs space-y-2.5 shadow-md">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2 font-sans">
+            <span className="text-xs font-semibold text-white flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+              <span>SECURITY REVERT VERIFICATION: {defenseReport.title}</span>
             </span>
-            <span className="rounded bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 text-[10px] font-bold">
-              ATTACK REPELLED • ZERO BALANCE LOSS
+            <span className="font-mono text-[10px] text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-2 py-0.5 rounded font-bold">
+              ATTACK REPELLED • 0.00 LOSS
             </span>
           </div>
 
-          {/* Adversarial Prompt Display */}
-          <div className="mt-3 rounded bg-white p-2.5 border border-rose-200 font-mono text-xs text-slate-800">
-            <span className="text-[10px] font-bold text-slate-400 block mb-1 uppercase font-sans">
-              Intercepted Adversarial Prompt:
-            </span>
-            "{defenseReport.adversarial_prompt}"
-          </div>
-
-          {/* Dual Layer Inspection Breakdown */}
-          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-            {/* Stage 1: Off-Chain Firewall Interception */}
-            <div className="rounded-lg bg-white p-3 border border-rose-200">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="font-bold text-slate-800">Stage 1: Pre-Execution Firewall</span>
-                <span className="rounded bg-rose-100 text-rose-800 px-1.5 py-0.5 text-[10px] font-bold">
-                  INTERCEPTED
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-600">
-                Off-chain guardrail triggered: {defenseReport.firewall.stage1_checks.find((c) => !c.passed)?.detail || "Violated session key policy guardrails."}
-              </p>
+          <div className="space-y-1.5 text-[11px] leading-relaxed">
+            <div>
+              <span className="text-slate-500">PAYLOAD: </span>
+              <span className="text-slate-300">"{defenseReport.adversarial_prompt}"</span>
             </div>
 
-            {/* Stage 2: On-Chain Solidity Smart Account Revert */}
-            <div className="rounded-lg bg-white p-3 border border-rose-200">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="font-bold text-slate-800">Stage 2: AegisVault.sol Guardrail</span>
-                <span className="rounded bg-rose-100 text-rose-800 px-1.5 py-0.5 text-[10px] font-bold font-mono">
-                  REVERTED ON-CHAIN
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px] font-mono font-semibold text-rose-700">
-                <span>Solidity Revert:</span>
-                <span className="rounded bg-rose-50 px-1.5 py-0.5 border border-rose-200">
-                  {defenseReport.solidity_custom_error}
-                </span>
-              </div>
+            <div>
+              <span className="text-slate-500">STAGE 1 (OFF-CHAIN FIREWALL): </span>
+              <span className="text-rose-400 font-semibold">
+                INTERCEPTED — Policy Violation Detected
+              </span>
             </div>
-          </div>
 
-          {/* Treasury Integrity Proof */}
-          <div className="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 font-mono text-[11px]">
+            <div>
+              <span className="text-slate-500">STAGE 2 (SOLIDITY AEGISVAULT.SOL): </span>
+              <span className="text-rose-400 font-semibold">
+                REVERTED — error {defenseReport.solidity_custom_error}
+              </span>
+            </div>
+
+            <div className="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px]">
               <div>
-                <span className="text-slate-600 font-sans">Treasury Custody Integrity: </span>
-                <span className="font-bold text-slate-900">
+                <span className="text-slate-500">TREASURY CUSTODY: </span>
+                <span className="text-slate-200">
                   ${defenseReport.vault_balance_before_usdc.toLocaleString(undefined, { minimumFractionDigits: 2 })} → ${defenseReport.vault_balance_after_usdc.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDC
                 </span>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-slate-600 font-sans">Attacker Balance: <strong className="text-slate-900 font-mono">$0.00</strong></span>
-                <span className="rounded bg-emerald-600 text-white px-2 py-0.5 text-[10px] font-bold">
-                  FUNDS LOST: $0.00 USDC
-                </span>
+              <div className="text-emerald-400 font-bold">
+                NET BALANCE LOSS: $0.00 USDC
               </div>
             </div>
           </div>
