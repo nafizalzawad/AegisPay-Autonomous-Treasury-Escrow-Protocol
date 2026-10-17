@@ -16,15 +16,6 @@ remappings = [
     "forge-std/=lib/forge-std/src/"
 ]
 
-[lint]
-ignored_error_codes = [
-    "reentrancy-events",
-    "unsafe-typecast",
-    "block-timestamp",
-    "missing-zero-check",
-    "ecrecover",
-    "environment-read-across-mutation"
-]
 
 [rpc_endpoints]
 anvil = "http://127.0.0.1:8545"

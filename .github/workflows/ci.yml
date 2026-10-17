@@ -21,8 +21,9 @@ jobs:
         with:
           version: nightly
 
-      - name: Build Contracts
+      - name: Initialize Submodules & Build Contracts
         run: |
+          git submodule update --init --recursive
           cd contracts
           forge --version
           forge build
@@ -47,40 +48,78 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install Foundry (for Anvil node)
+      - name: Install Foundry (for Anvil & Forge Script)
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
+
+      - name: Initialize Submodules
+        run: |
+          git submodule update --init --recursive
 
       - name: Install Python Dependencies
         run: |
           pip install --upgrade pip
           pip install -r backend/requirements.txt
 
-      - name: Start Anvil Node
+      - name: Launch Anvil, Seed Contracts, Run Pytest & E2E Verification
         run: |
+          # 1. Start Anvil in background
           anvil --host 0.0.0.0 --port 8545 > /tmp/anvil.log 2>&1 &
-          sleep 3
-          curl -s -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://127.0.0.1:8545
+          ANVIL_PID=$!
+          echo "Anvil running with PID $ANVIL_PID"
 
-      - name: Deploy & Seed Contracts
-        run: |
+          # Wait for Anvil to respond
+          echo "Waiting for Anvil RPC..."
+          for i in {1..30}; do
+            if curl -s -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://127.0.0.1:8545 >/dev/null 2>&1; then
+              echo "Anvil is ready."
+              break
+            fi
+            sleep 0.5
+          done
+
+          # 2. Deploy & Seed Contracts
+          echo "Deploying and seeding contracts..."
           cd contracts
           forge script script/DeployAndSeed.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+          cd ..
 
-      - name: Run Backend Pytest Suite
-        run: |
-          pytest backend/tests/test_api.py -v
+          # 3. Run Pytest Suite
+          echo "Running Pytest suite..."
+          PYTHONPATH=backend pytest backend/tests/test_api.py -v
 
-      - name: Start FastAPI Relayer
-        run: |
+          # 4. Start FastAPI Relayer
+          echo "Starting FastAPI backend..."
           python -m uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000 > /tmp/backend.log 2>&1 &
-          sleep 3
-          curl -s http://127.0.0.1:8000/api/v1/health
+          BACKEND_PID=$!
+          echo "FastAPI running with PID $BACKEND_PID"
 
-      - name: Run 10-Checkpoint E2E Smoke & Adversarial Verification
-        run: |
+          # Wait for FastAPI health check
+          echo "Waiting for FastAPI health check..."
+          for i in {1..30}; do
+            if curl -s http://127.0.0.1:8000/api/v1/health >/dev/null 2>&1; then
+              echo "FastAPI relayer is healthy."
+              break
+            fi
+            sleep 0.5
+          done
+
+          # 5. Run 10-Checkpoint E2E Smoke & Adversarial Verification
+          echo "Running Full-Stack E2E Verification..."
           python scripts/e2e_verify.py
+
+          # Clean up background processes
+          kill -9 $BACKEND_PID || true
+          kill -9 $ANVIL_PID || true
+
+      - name: Dump Logs on Failure
+        if: failure()
+        run: |
+          echo "=== Anvil Log ==="
+          cat /tmp/anvil.log || true
+          echo "=== Backend Log ==="
+          cat /tmp/backend.log || true
 
   build-frontend:
     name: Frontend TypeScript Build
