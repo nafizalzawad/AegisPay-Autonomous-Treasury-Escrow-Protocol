@@ -4,6 +4,7 @@ import time
 import uuid
 import hashlib
 import subprocess
+import shutil
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Tuple
 from fastapi import HTTPException
@@ -652,15 +653,29 @@ class BlockchainService:
     def reset_demo(self) -> Dict[str, Any]:
         """Re-runs DeployAndSeed.s.sol to cleanly reset on-chain state and audit logs"""
         contracts_dir = settings.CONTRACTS_DIR
-        cmd = "forge script script/DeployAndSeed.s.sol --rpc-url http://127.0.0.1:8545 --broadcast --ffi"
 
-        foundry_path = r"C:\Users\USER\.foundry\bin"
+        # Build cross-platform PATH that includes common foundry bin locations
         env = os.environ.copy()
-        env["PATH"] = f"{foundry_path};{env.get('PATH', '')}"
+        extra_paths = [
+            os.path.expanduser("~/.foundry/bin"),
+            r"C:\Users\USER\.foundry\bin",
+        ]
+        valid_paths = [p for p in extra_paths if os.path.exists(p)]
+        if valid_paths:
+            current_path = env.get("PATH", "")
+            env["PATH"] = os.pathsep.join(valid_paths + ([current_path] if current_path else []))
+
+        forge_bin = shutil.which("forge", path=env.get("PATH")) or "forge"
+        cmd = f'"{forge_bin}" script script/DeployAndSeed.s.sol --rpc-url {settings.RPC_URL} --broadcast'
 
         res = subprocess.run(
             cmd, cwd=str(contracts_dir), shell=True, env=env, capture_output=True, text=True
         )
+
+        if res.returncode != 0:
+            raise RuntimeError(
+                f"Failed to reset demo via forge script (exit {res.returncode}):\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}"
+            )
 
         # Reset in-memory metadata and logs
         self.escrow_descriptions = {1: "Deliver Initial Architecture Specs"}
