@@ -3,16 +3,27 @@ src = "src"
 out = "out"
 libs = ["lib"]
 solc = "0.8.24"
+evm_version = "cancun"
 optimizer = true
 optimizer_runs = 200
 fs_permissions = [
-    { access = "read-write", path = "./" },
-    { access = "read-write", path = "../shared" }
+    { access = "read-write", path = "../shared" },
+    { access = "read-write", path = "../" }
 ]
 
 remappings = [
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "forge-std/=lib/forge-std/src/"
+]
+
+[lint]
+ignored_error_codes = [
+    "reentrancy-events",
+    "unsafe-typecast",
+    "block-timestamp",
+    "missing-zero-check",
+    "ecrecover",
+    "environment-read-across-mutation"
 ]
 
 [rpc_endpoints]

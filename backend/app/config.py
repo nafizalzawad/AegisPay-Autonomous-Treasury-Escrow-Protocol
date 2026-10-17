@@ -33,8 +33,11 @@ class Settings:
         "AGENT_ADDRESS", "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
     )
     AGENT_PRIVATE_KEY: str = os.getenv(
-        "AGENT_PRIVATE_KEY",
-        "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
+        "AGENT_SESSION_PRIVATE_KEY",
+        os.getenv(
+            "AGENT_PRIVATE_KEY",
+            "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
+        ),
     )
 
     CONTRACTOR_ADDRESS: str = os.getenv(
@@ -46,11 +49,12 @@ class Settings:
     )
 
     ATTACKER_ADDRESS: str = os.getenv(
-        "ATTACKER_ADDRESS", "0x90F79bf6EB2c4f870365E785982E1f101E93b906"
+        "HACKER_ADDRESS",
+        os.getenv("ATTACKER_ADDRESS", "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720"),
     )
     ATTACKER_PRIVATE_KEY: str = os.getenv(
         "ATTACKER_PRIVATE_KEY",
-        "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6",
+        "0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6",
     )
 
     # Server settings

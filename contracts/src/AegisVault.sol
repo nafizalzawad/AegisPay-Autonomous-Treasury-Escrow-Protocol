@@ -1,143 +1,144 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IAegisPolicy} from "./interfaces/IAegisPolicy.sol";
+
+interface IERC20Minimal {
+    function transfer(address to, uint256 amount) external returns (bool);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+}
+
+interface IMilestoneEscrow {
+    function createEscrow(
+        address contractor,
+        uint256 totalAmount,
+        uint16 taxWithholdingBps,
+        bytes32 deliverableSpecHash
+    ) external returns (uint256 escrowId);
+
+    function releaseMilestone(uint256 escrowId, bytes32 attestationHash) external;
+}
 
 /**
  * @title AegisVault
- * @notice Institutional smart treasury account decoupling autonomous AI perception from deterministic on-chain execution.
- * @dev Enforces strict session key limits, recipient whitelists, target contracts, and selector policies.
+ * @notice Institutional ERC-4337 compatible smart account with deterministic session-key guardrails and tax reserve isolation.
  */
-contract AegisVault is Ownable, ReentrancyGuard, IAegisPolicy {
-    using SafeERC20 for IERC20;
-
-    // Standard ERC20 function selectors
-    bytes4 private constant SELECTOR_ERC20_TRANSFER = 0xa9059cbb; // transfer(address,uint256)
-    bytes4 private constant SELECTOR_ERC20_APPROVE = 0x095ea7b3;  // approve(address,uint256)
-
-    // MilestoneEscrow function selectors
-    // createEscrow(address,address,uint256,uint16,address,bytes32,uint256)
-    bytes4 private constant SELECTOR_CREATE_ESCROW = 0x0a1d5e6d;
-    // settleEscrow(bytes32,bytes32)
-    bytes4 private constant SELECTOR_SETTLE_ESCROW = 0xb20616e0;
-    // refundEscrow(bytes32)
-    bytes4 private constant SELECTOR_REFUND_ESCROW = 0x47aed508;
-
-    SessionPolicy public policy;
-
-    mapping(address => bool) public isRecipientWhitelisted;
-    mapping(address => bool) public isTargetWhitelisted;
-    mapping(bytes4 => bool) public isSelectorWhitelisted;
-
-    // Track accumulated tax reserves held in vault
+contract AegisVault is IAegisPolicy {
+    address public owner;
+    address public entryPoint;
+    address public immutable usdcToken;
     uint256 public taxReserveBalance;
+    uint256 public nonce;
 
-    event TaxReserveFunded(uint256 amount, uint256 newBalance);
-    event TaxReserveWithdrawn(address indexed recipient, uint256 amount);
-    event NativeReceived(address indexed sender, uint256 amount);
+    mapping(address => SessionKeyPolicy) public sessionPolicies;
+    mapping(address => bool) public whitelistedRecipients;
+    mapping(address => mapping(bytes4 => bool)) public allowedTargetSelectors;
 
-    constructor(address initialOwner) Ownable(initialOwner) {}
+    // Standard ERC-20 selectors
+    bytes4 private constant SELECTOR_ERC20_TRANSFER = 0xa9059cbb; // transfer(address,uint256)
+    bytes4 private constant SELECTOR_ERC20_APPROVE  = 0x095ea7b3; // approve(address,uint256)
 
-    receive() external payable {
-        emit NativeReceived(msg.sender, msg.value);
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert UnauthorizedCaller(msg.sender);
+        _;
     }
 
-    fallback() external payable {
-        emit NativeReceived(msg.sender, msg.value);
+    modifier onlyOwnerOrEntryPoint() {
+        if (msg.sender != owner && msg.sender != entryPoint) {
+            revert UnauthorizedCaller(msg.sender);
+        }
+        _;
     }
+
+    constructor(address _owner, address _entryPoint, address _usdcToken) {
+        if (_owner == address(0)) revert UnauthorizedCaller(address(0));
+        owner = _owner;
+        entryPoint = _entryPoint;
+        usdcToken = _usdcToken;
+    }
+
+    receive() external payable {}
+    fallback() external payable {}
 
     // =========================================================================
     // POLICY MANAGEMENT (OWNER ONLY)
     // =========================================================================
 
-    /**
-     * @notice Configures or updates the session policy for the AI Agent
-     * @param agent Address of the delegated AI Agent session key
-     * @param maxPerTx Max spending limit per individual transaction
-     * @param maxDaily Max spending limit per 24-hour rolling window
-     * @param validityDuration Duration in seconds the policy is active for
-     * @param taxReserveBps Tax withholding rate in basis points (100 = 1%)
-     * @param taxReserveWallet Destination wallet for withheld tax reserves
-     */
-    function setSessionPolicy(
-        address agent,
+    function configureSessionKey(
+        address sessionKey,
+        uint64 expiresAt,
         uint256 maxPerTx,
-        uint256 maxDaily,
-        uint256 validityDuration,
-        uint16 taxReserveBps,
-        address taxReserveWallet
+        uint256 maxPerDay
     ) external onlyOwner {
-        if (agent == address(0)) revert ZeroAddress();
-        if (taxReserveBps > 10000) revert InvalidTaxRate(taxReserveBps);
-
-        policy = SessionPolicy({
-            agent: agent,
-            maxPerTx: maxPerTx,
-            maxDaily: maxDaily,
-            currentDailySpent: 0,
-            lastDailyReset: block.timestamp,
-            validUntil: block.timestamp + validityDuration,
-            taxReserveBps: taxReserveBps,
-            taxReserveWallet: taxReserveWallet == address(0) ? address(this) : taxReserveWallet,
-            isActive: true
+        if (sessionKey == address(0)) revert UnauthorizedCaller(address(0));
+        sessionPolicies[sessionKey] = SessionKeyPolicy({
+            isActive: true,
+            expiresAt: expiresAt,
+            maxAmountPerTx: maxPerTx,
+            maxAmountPerDay: maxPerDay,
+            spentToday: 0,
+            lastResetTimestamp: uint64(block.timestamp)
         });
 
-        emit PolicyUpdated(
-            agent,
-            maxPerTx,
-            maxDaily,
-            policy.validUntil,
-            taxReserveBps,
-            policy.taxReserveWallet
-        );
+        emit PolicyConfigured(sessionKey, expiresAt, maxPerTx, maxPerDay);
     }
 
-    function setPolicyActive(bool active) external onlyOwner {
-        policy.isActive = active;
+    function revokeSessionKey(address sessionKey) external onlyOwner {
+        sessionPolicies[sessionKey].isActive = false;
+        emit SessionKeyRevoked(sessionKey);
     }
 
     function setRecipientWhitelist(address recipient, bool allowed) external onlyOwner {
-        if (recipient == address(0)) revert ZeroAddress();
-        isRecipientWhitelisted[recipient] = allowed;
-        emit RecipientWhitelisted(recipient, allowed);
+        whitelistedRecipients[recipient] = allowed;
+        emit RecipientWhitelistUpdated(recipient, allowed);
     }
 
-    function setRecipientsWhitelistBatch(address[] calldata recipients, bool allowed) external onlyOwner {
-        for (uint256 i = 0; i < recipients.length; i++) {
-            if (recipients[i] == address(0)) revert ZeroAddress();
-            isRecipientWhitelisted[recipients[i]] = allowed;
-            emit RecipientWhitelisted(recipients[i], allowed);
+    function setAllowedTargetSelector(address target, bytes4 selector, bool allowed) external onlyOwner {
+        allowedTargetSelectors[target][selector] = allowed;
+        emit TargetSelectorUpdated(target, selector, allowed);
+    }
+
+    function setOwner(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert UnauthorizedCaller(address(0));
+        owner = newOwner;
+    }
+
+    function setEntryPoint(address newEntryPoint) external onlyOwner {
+        entryPoint = newEntryPoint;
+    }
+
+    // =========================================================================
+    // TREASURY & TAX ACCOUNTING
+    // =========================================================================
+
+    /**
+     * @notice Returns unencumbered liquidity available for active operations (excluding tax reserves)
+     */
+    function operatingBalance() public view returns (uint256) {
+        uint256 total = IERC20Minimal(usdcToken).balanceOf(address(this));
+        if (total <= taxReserveBalance) {
+            return 0;
         }
+        return total - taxReserveBalance;
     }
 
-    function setTargetWhitelist(address target, bool allowed) external onlyOwner {
-        if (target == address(0)) revert ZeroAddress();
-        isTargetWhitelisted[target] = allowed;
-        emit TargetWhitelisted(target, allowed);
+    /**
+     * @notice Records an incoming tax withholding deduction
+     */
+    function recordTaxWithholding(uint256 escrowId, uint256 taxAmount) external {
+        taxReserveBalance += taxAmount;
+        emit TaxWithheld(escrowId, taxAmount, taxReserveBalance);
     }
 
-    function setTargetsWhitelistBatch(address[] calldata targets, bool allowed) external onlyOwner {
-        for (uint256 i = 0; i < targets.length; i++) {
-            if (targets[i] == address(0)) revert ZeroAddress();
-            isTargetWhitelisted[targets[i]] = allowed;
-            emit TargetWhitelisted(targets[i], allowed);
-        }
-    }
-
-    function setSelectorWhitelist(bytes4 selector, bool allowed) external onlyOwner {
-        isSelectorWhitelisted[selector] = allowed;
-        emit SelectorWhitelisted(selector, allowed);
-    }
-
-    function setSelectorsWhitelistBatch(bytes4[] calldata selectors, bool allowed) external onlyOwner {
-        for (uint256 i = 0; i < selectors.length; i++) {
-            isSelectorWhitelisted[selectors[i]] = allowed;
-            emit SelectorWhitelisted(selectors[i], allowed);
-        }
+    /**
+     * @notice Allows owner to remit isolated tax reserves to tax authority
+     */
+    function withdrawTaxReserve(address to, uint256 amount) external onlyOwner {
+        require(amount <= taxReserveBalance, "Exceeds tax reserve balance");
+        taxReserveBalance -= amount;
+        bool ok = IERC20Minimal(usdcToken).transfer(to, amount);
+        if (!ok) revert ExecutionFailed("");
     }
 
     // =========================================================================
@@ -145,184 +146,246 @@ contract AegisVault is Ownable, ReentrancyGuard, IAegisPolicy {
     // =========================================================================
 
     /**
-     * @notice Unrestricted execution for Treasury Owner / Admin
+     * @notice Unrestricted execution for Treasury Owner
      */
-    function executeAsOwner(
+    function executeByOwner(
         address target,
-        uint256 value,
-        bytes calldata data
+        bytes calldata data,
+        uint256 value
     ) external onlyOwner returns (bytes memory) {
-        if (target == address(0)) revert ZeroAddress();
-        (bool success, bytes memory returnData) = target.call{value: value}(data);
-        if (!success) {
-            revert TargetExecutionFailed(returnData);
-        }
-        return returnData;
+        (bool ok, bytes memory res) = target.call{value: value}(data);
+        if (!ok) revert ExecutionFailed(res);
+        return res;
     }
 
     /**
-     * @notice Delegated execution for the AI Agent session key, bound by on-chain guardrails.
-     * @dev Enforces validity window, target whitelist, selector whitelist, spend limits, and recipient whitelist.
+     * @notice Delegated execution for the AI Agent session key.
+     * @dev Strictly enforces calldata verification, spend limits, rolling daily caps, and recipient allowlists.
      */
-    function executeAsAgent(
+    function executeByAgent(
         address target,
-        uint256 value,
-        bytes calldata data
-    ) external nonReentrant returns (bytes memory) {
-        // 1. Authenticate caller
-        if (msg.sender != policy.agent) {
-            revert UnauthorizedAgent(msg.sender);
-        }
+        bytes calldata data,
+        address intendedRecipient,
+        uint256 spendAmount,
+        bytes32 actionRef
+    ) external returns (bytes memory) {
+        // 1. Authenticate Session Key
+        SessionKeyPolicy storage policy = sessionPolicies[msg.sender];
         if (!policy.isActive) {
-            revert PolicyInactive();
+            revert SessionKeyInactive(msg.sender);
         }
-        if (block.timestamp > policy.validUntil) {
-            revert PolicyExpired(policy.validUntil, block.timestamp);
-        }
-
-        // 2. Validate Target
-        if (!isTargetWhitelisted[target]) {
-            emit AgentExecutionBlocked(msg.sender, target, bytes4(data[:4]), "Target not whitelisted");
-            revert TargetNotWhitelisted(target);
+        if (block.timestamp > policy.expiresAt) {
+            revert SessionKeyExpired(policy.expiresAt, uint64(block.timestamp));
         }
 
-        // 3. Validate Function Selector
+        // 2. Target Selector Verification
         if (data.length < 4) {
-            revert SelectorNotAllowed(bytes4(0));
+            revert FunctionSelectorNotAllowed(bytes4(0));
         }
-        bytes4 selector = bytes4(data[:4]);
-        if (!isSelectorWhitelisted[selector]) {
-            emit AgentExecutionBlocked(msg.sender, target, selector, "Selector not allowed");
-            revert SelectorNotAllowed(selector);
-        }
-
-        // 4. Rolling 24h reset check
-        if (block.timestamp >= policy.lastDailyReset + 1 days) {
-            policy.currentDailySpent = 0;
-            policy.lastDailyReset = block.timestamp;
+        bytes4 sel = bytes4(data[:4]);
+        if (!allowedTargetSelectors[target][sel]) {
+            revert FunctionSelectorNotAllowed(sel);
         }
 
-        // 5. Inspect call calldata for spending & recipient guardrails
-        _enforcePolicyRules(target, value, selector, data);
-
-        // 6. Execute external call
-        (bool success, bytes memory returnData) = target.call{value: value}(data);
-        if (!success) {
-            emit AgentExecutionBlocked(msg.sender, target, selector, "Execution reverted on target");
-            revert TargetExecutionFailed(returnData);
+        // 3. Calldata Inspection against Argument Spoofing
+        if (sel == SELECTOR_ERC20_TRANSFER || sel == SELECTOR_ERC20_APPROVE) {
+            (address decodedTarget, uint256 decodedAmount) = abi.decode(data[4:], (address, uint256));
+            if (decodedTarget != intendedRecipient) {
+                revert RecipientNotWhitelisted(decodedTarget);
+            }
+            if (decodedAmount != spendAmount) {
+                revert PerTxSpendLimitExceeded(decodedAmount, policy.maxAmountPerTx);
+            }
         }
 
-        emit AgentExecutionSucceeded(msg.sender, target, value, data, returnData);
-        return returnData;
+        // 4. Financial Guardrails Enforcement
+        if (spendAmount > 0) {
+            if (!whitelistedRecipients[intendedRecipient]) {
+                revert RecipientNotWhitelisted(intendedRecipient);
+            }
+            if (spendAmount > policy.maxAmountPerTx) {
+                revert PerTxSpendLimitExceeded(spendAmount, policy.maxAmountPerTx);
+            }
+
+            // Rolling 24-hour reset
+            if (block.timestamp >= policy.lastResetTimestamp + 1 days) {
+                policy.spentToday = 0;
+                policy.lastResetTimestamp = uint64(block.timestamp);
+            }
+
+            if (policy.spentToday + spendAmount > policy.maxAmountPerDay) {
+                revert DailySpendLimitExceeded(spendAmount, policy.maxAmountPerDay - policy.spentToday);
+            }
+
+            // Ensure agent never spends isolated tax reserves
+            uint256 opBal = operatingBalance();
+            if (spendAmount > opBal) {
+                revert PerTxSpendLimitExceeded(spendAmount, opBal);
+            }
+
+            policy.spentToday += spendAmount;
+        }
+
+        nonce++;
+
+        // 5. Execute on Target
+        (bool ok, bytes memory res) = target.call(data);
+        if (!ok) {
+            revert ExecutionFailed(res);
+        }
+
+        emit AgentActionExecuted(
+            msg.sender,
+            target,
+            sel,
+            intendedRecipient,
+            spendAmount,
+            actionRef
+        );
+
+        return res;
     }
 
     /**
-     * @dev Internal helper enforcing spending limits and recipient whitelisting
+     * @notice Atomic helper for Agent to approve and create an escrow in a single transaction
      */
-    function _enforcePolicyRules(
-        address /* target */,
-        uint256 value,
-        bytes4 selector,
-        bytes calldata data
-    ) internal {
-        // Enforce native ETH spend limits if value > 0
-        if (value > 0) {
-            _checkAndUpdateSpend(value);
+    function createEscrowByAgent(
+        address escrowContract,
+        address contractor,
+        uint256 amount,
+        uint16 taxBps,
+        bytes32 specHash
+    ) external returns (uint256 escrowId) {
+        SessionKeyPolicy storage policy = sessionPolicies[msg.sender];
+        if (!policy.isActive) revert SessionKeyInactive(msg.sender);
+        if (block.timestamp > policy.expiresAt) revert SessionKeyExpired(policy.expiresAt, uint64(block.timestamp));
+
+        bytes4 createSel = IMilestoneEscrow.createEscrow.selector;
+        if (!allowedTargetSelectors[escrowContract][createSel]) {
+            revert TargetContractNotAllowed(escrowContract);
         }
 
-        // Inspect ERC20 transfer(address to, uint256 amount)
-        if (selector == SELECTOR_ERC20_TRANSFER) {
-            (address to, uint256 amount) = abi.decode(data[4:], (address, uint256));
-            if (!isRecipientWhitelisted[to]) {
-                revert RecipientNotWhitelisted(to);
-            }
-            _checkAndUpdateSpend(amount);
+        if (!whitelistedRecipients[contractor]) {
+            revert RecipientNotWhitelisted(contractor);
         }
-        // Inspect ERC20 approve(address spender, uint256 amount)
-        else if (selector == SELECTOR_ERC20_APPROVE) {
-            (address spender, uint256 amount) = abi.decode(data[4:], (address, uint256));
-            // Strict defense: Infinite approvals are explicitly forbidden
-            if (amount == type(uint256).max || amount > policy.maxDaily * 10) {
-                revert InfiniteApprovalForbidden();
-            }
-            // Spender must be an approved whitelisted target (e.g. MilestoneEscrow)
-            if (!isTargetWhitelisted[spender]) {
-                revert TargetNotWhitelisted(spender);
-            }
-            if (amount > policy.maxPerTx) {
-                revert SpendLimitExceeded(amount, policy.maxPerTx);
-            }
-        }
-        // Inspect MilestoneEscrow createEscrow(...)
-        else if (selector == SELECTOR_CREATE_ESCROW) {
-            (
-                address contractor,
-                ,
-                uint256 amount,
-                ,
-                ,
-                ,
-                
-            ) = abi.decode(data[4:], (address, address, uint256, uint16, address, bytes32, uint256));
 
-            if (!isRecipientWhitelisted[contractor]) {
-                revert RecipientNotWhitelisted(contractor);
-            }
-            _checkAndUpdateSpend(amount);
+        if (amount > policy.maxAmountPerTx) {
+            revert PerTxSpendLimitExceeded(amount, policy.maxAmountPerTx);
         }
+
+        if (block.timestamp >= policy.lastResetTimestamp + 1 days) {
+            policy.spentToday = 0;
+            policy.lastResetTimestamp = uint64(block.timestamp);
+        }
+
+        if (policy.spentToday + amount > policy.maxAmountPerDay) {
+            revert DailySpendLimitExceeded(amount, policy.maxAmountPerDay - policy.spentToday);
+        }
+
+        uint256 opBal = operatingBalance();
+        if (amount > opBal) {
+            revert PerTxSpendLimitExceeded(amount, opBal);
+        }
+
+        policy.spentToday += amount;
+        nonce++;
+
+        // Approve exact escrow amount
+        bool aOk = IERC20Minimal(usdcToken).approve(escrowContract, amount);
+        if (!aOk) revert ExecutionFailed("");
+
+        // Call MilestoneEscrow
+        escrowId = IMilestoneEscrow(escrowContract).createEscrow(contractor, amount, taxBps, specHash);
+
+        emit AgentActionExecuted(
+            msg.sender,
+            escrowContract,
+            createSel,
+            contractor,
+            amount,
+            specHash
+        );
     }
 
     /**
-     * @dev Checks per-tx limit and daily cumulative limit, then updates currentDailySpent
+     * @notice Atomic helper for Agent to settle an escrow upon delivery verification
      */
-    function _checkAndUpdateSpend(uint256 amount) internal {
-        if (amount > policy.maxPerTx) {
-            revert SpendLimitExceeded(amount, policy.maxPerTx);
+    function settleEscrowByAgent(
+        address escrowContract,
+        uint256 escrowId,
+        bytes32 attestationHash
+    ) external {
+        SessionKeyPolicy storage policy = sessionPolicies[msg.sender];
+        if (!policy.isActive) revert SessionKeyInactive(msg.sender);
+        if (block.timestamp > policy.expiresAt) revert SessionKeyExpired(policy.expiresAt, uint64(block.timestamp));
+
+        bytes4 releaseSel = IMilestoneEscrow.releaseMilestone.selector;
+        if (!allowedTargetSelectors[escrowContract][releaseSel]) {
+            revert FunctionSelectorNotAllowed(releaseSel);
         }
-        if (policy.currentDailySpent + amount > policy.maxDaily) {
-            revert DailyLimitExceeded(amount, policy.maxDaily - policy.currentDailySpent);
-        }
-        policy.currentDailySpent += amount;
+
+        nonce++;
+        IMilestoneEscrow(escrowContract).releaseMilestone(escrowId, attestationHash);
+
+        emit AgentActionExecuted(
+            msg.sender,
+            escrowContract,
+            releaseSel,
+            address(0),
+            0,
+            attestationHash
+        );
     }
 
     // =========================================================================
-    // TAX RESERVE ACCOUNTING
+    // ERC-4337 COMPATIBILITY
     // =========================================================================
 
     /**
-     * @notice Records an incoming tax reserve allocation inside the vault
+     * @notice ERC-4337 signature and policy verification hook
      */
-    function recordTaxReserveDeposit(uint256 amount) external {
-        taxReserveBalance += amount;
-        emit TaxReserveFunded(amount, taxReserveBalance);
-    }
-
-    /**
-     * @notice Allows owner to transfer tax reserves to official tax authority/bank account
-     */
-    function withdrawTaxReserve(
-        address token,
-        address to,
-        uint256 amount
-    ) external onlyOwner {
-        if (to == address(0)) revert ZeroAddress();
-        require(amount <= taxReserveBalance, "Amount exceeds tax reserve balance");
-        taxReserveBalance -= amount;
-        IERC20(token).safeTransfer(to, amount);
-        emit TaxReserveWithdrawn(to, amount);
-    }
-
-    // =========================================================================
-    // VIEW HELPERS
-    // =========================================================================
-
-    function getAvailableDailyLimit() external view returns (uint256) {
-        if (block.timestamp >= policy.lastDailyReset + 1 days) {
-            return policy.maxDaily;
+    function validateUserOp(
+        PackedUserOperation calldata userOp,
+        bytes32 userOpHash,
+        uint256 missingAccountFunds
+    ) external returns (uint256 validationData) {
+        if (userOp.signature.length != 65) {
+            return 1; // SIG_VALIDATION_FAILED
         }
-        if (policy.currentDailySpent >= policy.maxDaily) {
-            return 0;
+
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        bytes memory sig = userOp.signature;
+        assembly {
+            r := mload(add(sig, 32))
+            s := mload(add(sig, 64))
+            v := byte(0, mload(add(sig, 96)))
         }
-        return policy.maxDaily - policy.currentDailySpent;
+
+        // EIP-191 personal sign recovery
+        bytes32 ethSignedHash = keccak256(
+            abi.encodePacked("\x19Ethereum Signed Message:\n32", userOpHash)
+        );
+        address signer = ecrecover(ethSignedHash, v, r, s);
+        if (signer == address(0)) {
+            return 1;
+        }
+
+        // Validate signer is owner or active session key
+        if (signer != owner) {
+            SessionKeyPolicy storage policy = sessionPolicies[signer];
+            if (!policy.isActive || block.timestamp > policy.expiresAt) {
+                return 1;
+            }
+        }
+
+        // Pay missing funds to entrypoint if requested
+        if (missingAccountFunds > 0 && msg.sender == entryPoint) {
+            (bool sent, ) = entryPoint.call{value: missingAccountFunds}("");
+            require(sent || !sent); // silence unused variable
+        }
+
+        return 0; // SIG_VALIDATION_SUCCESS
     }
 }

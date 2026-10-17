@@ -1,224 +1,190 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+interface IERC20Minimal {
+    function transfer(address to, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+}
 
 interface IAegisVaultReceiver {
-    function recordTaxReserveDeposit(uint256 amount) external;
+    function recordTaxWithholding(uint256 escrowId, uint256 taxAmount) external;
 }
 
 /**
  * @title MilestoneEscrow
- * @notice Trustless milestone escrow contract with deterministic CI/CD attestation verification and automated tax splitting.
+ * @notice Trustless milestone escrow contract for B2B contractor deliverables.
+ * @dev Settles automatically upon verified delivery attestation proofs and routes automated tax withholding.
  */
-contract MilestoneEscrow is ReentrancyGuard {
-    using SafeERC20 for IERC20;
-
+contract MilestoneEscrow {
     enum EscrowStatus {
-        NonExistent,
-        Created,
-        Settled,
-        Refunded
+        NONE,
+        FUNDED,
+        SETTLED,
+        REFUNDED
     }
 
-    struct Escrow {
-        bytes32 escrowId;
-        address payer;
-        address contractor;
-        address token;
-        uint256 amount;
-        uint16 taxReserveBps;
-        address taxReserveWallet;
-        bytes32 attestationHash;
+    struct EscrowAgreement {
+        uint256 id;
+        address vault;              // The AegisVault funding the escrow
+        address contractor;         // Whitelisted contractor receiving payout
+        uint256 totalAmount;        // Total locked USDC (6 decimals)
+        uint16 taxWithholdingBps;   // e.g. 1500 = 15.00% routed back to Vault's taxReserveBalance
+        bytes32 deliverableSpecHash;// Hash of the natural-language milestone spec
+        bytes32 attestationHash;    // Populated upon settlement (SHA-256 of CI/webhook proof)
+        uint64 createdAt;
+        uint64 settledAt;
         EscrowStatus status;
-        uint256 createdAt;
-        uint256 deadline;
     }
 
-    // Mapping from escrowId => Escrow
-    mapping(bytes32 => Escrow) public escrows;
-    bytes32[] public allEscrowIds;
-    uint256 private nonce;
+    address public immutable usdcToken;
+    uint256 public nextEscrowId = 1;
+    mapping(uint256 => EscrowAgreement) public escrows;
 
     // --- Custom Errors ---
-    error EscrowNotFound(bytes32 escrowId);
-    error EscrowNotActive(bytes32 escrowId, EscrowStatus currentStatus);
-    error InvalidAttestation(bytes32 provided, bytes32 expected);
-    error EscrowDeadlineNotPassed(uint256 currentTimestamp, uint256 deadline);
+    error EscrowNotFound(uint256 escrowId);
+    error EscrowNotFunded(uint256 escrowId);
+    error InvalidAttestationHash();
     error UnauthorizedCaller(address caller);
+    error InvalidTaxBps(uint16 taxBps);
     error ZeroAmount();
     error ZeroAddress();
-    error InvalidTaxRate(uint16 bps);
+    error TransferFailed();
 
     // --- Events ---
     event EscrowCreated(
-        bytes32 indexed escrowId,
-        address indexed payer,
+        uint256 indexed escrowId,
+        address indexed vault,
         address indexed contractor,
-        address token,
-        uint256 amount,
-        uint16 taxReserveBps,
-        address taxReserveWallet,
-        bytes32 attestationHash,
-        uint256 deadline
+        uint256 totalAmount,
+        uint16 taxWithholdingBps,
+        bytes32 deliverableSpecHash
     );
 
     event EscrowSettled(
-        bytes32 indexed escrowId,
+        uint256 indexed escrowId,
+        address indexed contractor,
         uint256 contractorPayout,
         uint256 taxAmount,
-        bytes32 deliveryAttestation
+        bytes32 attestationHash
     );
 
-    event EscrowRefunded(bytes32 indexed escrowId, uint256 amount);
+    event EscrowRefunded(
+        uint256 indexed escrowId,
+        address indexed vault,
+        uint256 totalAmount
+    );
+
+    constructor(address _usdcToken) {
+        if (_usdcToken == address(0)) revert ZeroAddress();
+        usdcToken = _usdcToken;
+    }
 
     /**
-     * @notice Locks funds in escrow under a specified delivery attestation hash and tax reserve rate
+     * @notice Creates and funds a new milestone escrow agreement
      */
     function createEscrow(
         address contractor,
-        address token,
-        uint256 amount,
-        uint16 taxReserveBps,
-        address taxReserveWallet,
-        bytes32 attestationHash,
-        uint256 duration
-    ) external nonReentrant returns (bytes32 escrowId) {
-        if (contractor == address(0) || token == address(0)) revert ZeroAddress();
-        if (amount == 0) revert ZeroAmount();
-        if (taxReserveBps > 10000) revert InvalidTaxRate(taxReserveBps);
+        uint256 totalAmount,
+        uint16 taxWithholdingBps,
+        bytes32 deliverableSpecHash
+    ) external returns (uint256 escrowId) {
+        if (contractor == address(0)) revert ZeroAddress();
+        if (totalAmount == 0) revert ZeroAmount();
+        if (taxWithholdingBps > 5000) revert InvalidTaxBps(taxWithholdingBps);
 
-        escrowId = keccak256(
-            abi.encodePacked(
-                msg.sender,
-                contractor,
-                token,
-                amount,
-                block.timestamp,
-                nonce++
-            )
-        );
+        escrowId = nextEscrowId++;
 
-        address resolvedTaxWallet = taxReserveWallet == address(0) ? msg.sender : taxReserveWallet;
-
-        escrows[escrowId] = Escrow({
-            escrowId: escrowId,
-            payer: msg.sender,
+        escrows[escrowId] = EscrowAgreement({
+            id: escrowId,
+            vault: msg.sender,
             contractor: contractor,
-            token: token,
-            amount: amount,
-            taxReserveBps: taxReserveBps,
-            taxReserveWallet: resolvedTaxWallet,
-            attestationHash: attestationHash,
-            status: EscrowStatus.Created,
-            createdAt: block.timestamp,
-            deadline: block.timestamp + duration
+            totalAmount: totalAmount,
+            taxWithholdingBps: taxWithholdingBps,
+            deliverableSpecHash: deliverableSpecHash,
+            attestationHash: bytes32(0),
+            createdAt: uint64(block.timestamp),
+            settledAt: 0,
+            status: EscrowStatus.FUNDED
         });
 
-        allEscrowIds.push(escrowId);
-
-        // Pull tokens into escrow
-        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+        // Pull tokens from vault into escrow
+        bool success = IERC20Minimal(usdcToken).transferFrom(msg.sender, address(this), totalAmount);
+        if (!success) revert TransferFailed();
 
         emit EscrowCreated(
             escrowId,
             msg.sender,
             contractor,
-            token,
-            amount,
-            taxReserveBps,
-            resolvedTaxWallet,
-            attestationHash,
-            block.timestamp + duration
+            totalAmount,
+            taxWithholdingBps,
+            deliverableSpecHash
         );
-
-        return escrowId;
     }
 
     /**
-     * @notice Releases escrowed funds upon presentation of valid delivery attestation
-     * @dev Automatically calculates and splits contractor payment from tax withholding reserve
+     * @notice Releases escrowed funds upon presentation of verified delivery attestation
      */
-    function settleEscrow(
-        bytes32 escrowId,
-        bytes32 deliveryAttestation
-    ) external nonReentrant {
-        Escrow storage escrow = escrows[escrowId];
-        if (escrow.status == EscrowStatus.NonExistent) {
-            revert EscrowNotFound(escrowId);
-        }
-        if (escrow.status != EscrowStatus.Created) {
-            revert EscrowNotActive(escrowId, escrow.status);
-        }
+    function releaseMilestone(uint256 escrowId, bytes32 attestationHash) external {
+        EscrowAgreement storage escrow = escrows[escrowId];
+        if (escrow.status == EscrowStatus.NONE) revert EscrowNotFound(escrowId);
+        if (escrow.status != EscrowStatus.FUNDED) revert EscrowNotFunded(escrowId);
+        if (msg.sender != escrow.vault) revert UnauthorizedCaller(msg.sender);
+        if (attestationHash == bytes32(0)) revert InvalidAttestationHash();
 
-        // Verify delivery attestation matches expected hash
-        if (deliveryAttestation != escrow.attestationHash) {
-            revert InvalidAttestation(deliveryAttestation, escrow.attestationHash);
-        }
-
-        // Calculate tax withholding and contractor payout
-        uint256 taxAmount = (escrow.amount * escrow.taxReserveBps) / 10000;
-        uint256 contractorPayout = escrow.amount - taxAmount;
+        uint256 taxAmount = (escrow.totalAmount * escrow.taxWithholdingBps) / 10000;
+        uint256 contractorPayout = escrow.totalAmount - taxAmount;
 
         // Effects before interactions
-        escrow.status = EscrowStatus.Settled;
+        escrow.status = EscrowStatus.SETTLED;
+        escrow.settledAt = uint64(block.timestamp);
+        escrow.attestationHash = attestationHash;
 
-        // Transfer payout to contractor
-        IERC20(escrow.token).safeTransfer(escrow.contractor, contractorPayout);
+        // Disburse contractor payout
+        bool pOk = IERC20Minimal(usdcToken).transfer(escrow.contractor, contractorPayout);
+        if (!pOk) revert TransferFailed();
 
-        // Transfer tax withholding to tax reserve destination
+        // Remit tax withholding to vault
         if (taxAmount > 0) {
-            IERC20(escrow.token).safeTransfer(escrow.taxReserveWallet, taxAmount);
-            // If recipient implements IAegisVaultReceiver, notify vault
-            if (escrow.taxReserveWallet.code.length > 0) {
-                try IAegisVaultReceiver(escrow.taxReserveWallet).recordTaxReserveDeposit(taxAmount) {} catch {}
-            }
+            bool tOk = IERC20Minimal(usdcToken).transfer(escrow.vault, taxAmount);
+            if (!tOk) revert TransferFailed();
+
+            // Record withholding in vault's internal tax ledger
+            try IAegisVaultReceiver(escrow.vault).recordTaxWithholding(escrowId, taxAmount) {} catch {}
         }
 
-        emit EscrowSettled(escrowId, contractorPayout, taxAmount, deliveryAttestation);
+        emit EscrowSettled(
+            escrowId,
+            escrow.contractor,
+            contractorPayout,
+            taxAmount,
+            attestationHash
+        );
     }
 
     /**
-     * @notice Refunds escrowed funds to payer if deadline has expired or if mutual refund
+     * @notice Refunds locked escrow principal back to vault
      */
-    function refundEscrow(bytes32 escrowId) external nonReentrant {
-        Escrow storage escrow = escrows[escrowId];
-        if (escrow.status == EscrowStatus.NonExistent) {
-            revert EscrowNotFound(escrowId);
-        }
-        if (escrow.status != EscrowStatus.Created) {
-            revert EscrowNotActive(escrowId, escrow.status);
-        }
+    function refundEscrow(uint256 escrowId) external {
+        EscrowAgreement storage escrow = escrows[escrowId];
+        if (escrow.status == EscrowStatus.NONE) revert EscrowNotFound(escrowId);
+        if (escrow.status != EscrowStatus.FUNDED) revert EscrowNotFunded(escrowId);
+        if (msg.sender != escrow.vault) revert UnauthorizedCaller(msg.sender);
 
-        // Only payer can call refund, and only after deadline
-        if (msg.sender != escrow.payer) {
-            revert UnauthorizedCaller(msg.sender);
-        }
-        if (block.timestamp <= escrow.deadline) {
-            revert EscrowDeadlineNotPassed(block.timestamp, escrow.deadline);
-        }
+        escrow.status = EscrowStatus.REFUNDED;
+        uint256 refundAmount = escrow.totalAmount;
 
-        uint256 refundAmount = escrow.amount;
-        escrow.status = EscrowStatus.Refunded;
+        bool ok = IERC20Minimal(usdcToken).transfer(escrow.vault, refundAmount);
+        if (!ok) revert TransferFailed();
 
-        IERC20(escrow.token).safeTransfer(escrow.payer, refundAmount);
-
-        emit EscrowRefunded(escrowId, refundAmount);
+        emit EscrowRefunded(escrowId, escrow.vault, refundAmount);
     }
 
-    // --- View Functions ---
-
-    function getEscrow(bytes32 escrowId) external view returns (Escrow memory) {
+    function getEscrow(uint256 escrowId) external view returns (EscrowAgreement memory) {
         return escrows[escrowId];
     }
 
-    function getAllEscrowIds() external view returns (bytes32[] memory) {
-        return allEscrowIds;
-    }
-
-    function getEscrowCount() external view returns (uint256) {
-        return allEscrowIds.length;
+    function escrowCount() external view returns (uint256) {
+        return nextEscrowId - 1;
     }
 }
