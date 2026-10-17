@@ -100,15 +100,15 @@ async def execute_redteam_attack(payload: RedTeamAttackRequest):
             try:
                 if payload.scenario_id == "attack_drain_10k":
                     # Transfer 10,000 USDC
-                    transfer_calldata = usdc_contract.encodeABI(
-                        fn_name="transfer",
+                    transfer_calldata = usdc_contract.encode_abi(
+                        "transfer",
                         args=[
                             Web3.to_checksum_address(scenario["recipient"]),
                             10000 * 10**6,
                         ],
                     )
-                    exec_calldata = vault_contract.encodeABI(
-                        fn_name="executeAsAgent",
+                    exec_calldata = vault_contract.encode_abi(
+                        "executeAsAgent",
                         args=[
                             Web3.to_checksum_address(contracts.get("MockUSDC")),
                             0,
@@ -124,15 +124,15 @@ async def execute_redteam_attack(payload: RedTeamAttackRequest):
                         onchain_revert = f"SpendLimitExceeded: {revert_err}"
 
                 elif payload.scenario_id == "attack_unwhitelisted_hacker":
-                    transfer_calldata = usdc_contract.encodeABI(
-                        fn_name="transfer",
+                    transfer_calldata = usdc_contract.encode_abi(
+                        "transfer",
                         args=[
                             Web3.to_checksum_address(settings.ATTACKER_ADDRESS),
                             500 * 10**6,
                         ],
                     )
-                    exec_calldata = vault_contract.encodeABI(
-                        fn_name="executeAsAgent",
+                    exec_calldata = vault_contract.encode_abi(
+                        "executeAsAgent",
                         args=[
                             Web3.to_checksum_address(contracts.get("MockUSDC")),
                             0,
@@ -148,15 +148,15 @@ async def execute_redteam_attack(payload: RedTeamAttackRequest):
                         onchain_revert = f"RecipientNotWhitelisted: {revert_err}"
 
                 elif payload.scenario_id == "attack_infinite_approval":
-                    approve_calldata = usdc_contract.encodeABI(
-                        fn_name="approve",
+                    approve_calldata = usdc_contract.encode_abi(
+                        "approve",
                         args=[
                             Web3.to_checksum_address(settings.ATTACKER_ADDRESS),
                             2**256 - 1,
                         ],
                     )
-                    exec_calldata = vault_contract.encodeABI(
-                        fn_name="executeAsAgent",
+                    exec_calldata = vault_contract.encode_abi(
+                        "executeAsAgent",
                         args=[
                             Web3.to_checksum_address(contracts.get("MockUSDC")),
                             0,

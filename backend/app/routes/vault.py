@@ -145,8 +145,8 @@ async def request_faucet(payload: FaucetRequest):
 
         amount_units = int(payload.amount_usdc * 10**6)
         usdc_contract = blockchain_service.get_usdc_contract()
-        calldata = usdc_contract.encodeABI(
-            fn_name="faucet",
+        calldata = usdc_contract.encode_abi(
+            "faucet",
             args=[Web3.to_checksum_address(payload.recipient), amount_units],
         )
 

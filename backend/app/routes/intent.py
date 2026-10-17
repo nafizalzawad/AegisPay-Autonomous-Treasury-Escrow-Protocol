@@ -174,15 +174,15 @@ async def execute_intent(payload: IntentExecutionRequest):
             escrow_contract = blockchain_service.get_escrow_contract()
 
             # Step 1: Agent calls AegisVault.executeAsAgent -> MockUSDC.approve(escrow, amount)
-            approve_calldata = usdc_contract.encodeABI(
-                fn_name="approve",
+            approve_calldata = usdc_contract.encode_abi(
+                "approve",
                 args=[
                     Web3.to_checksum_address(escrow_addr),
                     intent.amount_units,
                 ],
             )
-            exec_approve_calldata = vault_contract.encodeABI(
-                fn_name="executeAsAgent",
+            exec_approve_calldata = vault_contract.encode_abi(
+                "executeAsAgent",
                 args=[
                     Web3.to_checksum_address(usdc_addr),
                     0,
@@ -194,8 +194,8 @@ async def execute_intent(payload: IntentExecutionRequest):
             )
 
             # Step 2: Agent calls AegisVault.executeAsAgent -> MilestoneEscrow.createEscrow(...)
-            create_escrow_calldata = escrow_contract.encodeABI(
-                fn_name="createEscrow",
+            create_escrow_calldata = escrow_contract.encode_abi(
+                "createEscrow",
                 args=[
                     Web3.to_checksum_address(intent.recipient),
                     Web3.to_checksum_address(usdc_addr),
@@ -206,8 +206,8 @@ async def execute_intent(payload: IntentExecutionRequest):
                     intent.duration_days * 86400,
                 ],
             )
-            exec_create_calldata = vault_contract.encodeABI(
-                fn_name="executeAsAgent",
+            exec_create_calldata = vault_contract.encode_abi(
+                "executeAsAgent",
                 args=[
                     Web3.to_checksum_address(escrow_addr),
                     0,

@@ -205,15 +205,15 @@ async def trigger_github_webhook(payload: WebhookTriggerRequest):
                 vault_contract = blockchain_service.get_vault_contract()
                 escrow_contract = blockchain_service.get_escrow_contract()
 
-                settle_calldata = escrow_contract.encodeABI(
-                    fn_name="settleEscrow",
+                settle_calldata = escrow_contract.encode_abi(
+                    "settleEscrow",
                     args=[
                         bytes.fromhex(payload.escrow_id[2:]),
                         attestation_bytes,
                     ],
                 )
-                exec_settle_calldata = vault_contract.encodeABI(
-                    fn_name="executeAsAgent",
+                exec_settle_calldata = vault_contract.encode_abi(
+                    "executeAsAgent",
                     args=[
                         Web3.to_checksum_address(escrow_addr),
                         0,
