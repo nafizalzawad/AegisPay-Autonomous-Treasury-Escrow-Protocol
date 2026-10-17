@@ -1,3 +1,5 @@
+// Strict TypeScript interfaces matching backend/app/schemas.py Pydantic models
+
 export interface ApiResponse<T> {
   ok: boolean;
   data?: T;
@@ -6,149 +8,151 @@ export interface ApiResponse<T> {
   detail?: string;
 }
 
-export interface PolicyState {
-  agent: string;
-  max_per_tx_usdc: number;
-  max_per_tx_units: number;
-  max_daily_usdc: number;
-  max_daily_units: number;
-  current_daily_spent_usdc: number;
-  current_daily_spent_units: number;
-  available_daily_usdc: number;
-  valid_until: number;
-  is_expired: boolean;
-  tax_reserve_bps: number;
-  tax_reserve_wallet: string;
+export interface WhitelistedRecipient {
+  address: string;
+  label: string;
+}
+
+export interface AllowedSelector {
+  target: string;
+  selector: string;
+  label: string;
+}
+
+export interface SessionKeyPolicyDTO {
+  session_key_address: string;
   is_active: boolean;
-  whitelisted_recipients: string[];
-  whitelisted_targets: string[];
-  whitelisted_selectors: string[];
+  expires_at: number;
+  max_per_tx_usdc: number;
+  max_daily_usdc: number;
+  spent_today_usdc: number;
+  remaining_daily_usdc: number;
+  whitelisted_recipients: WhitelistedRecipient[];
+  allowed_selectors: AllowedSelector[];
 }
 
-export interface VaultStatus {
-  vault_address: string;
-  usdc_token_address: string;
-  escrow_contract_address: string;
-  usdc_balance: number;
-  usdc_balance_units: number;
-  native_eth_balance: number;
-  tax_reserve_balance: number;
-  tax_reserve_balance_units: number;
-  policy: PolicyState;
-  network: string;
+export interface VaultStateResponse {
   chain_id: number;
+  vault_address: string;
+  owner_address: string;
+  usdc_address: string;
+  escrow_contract_address: string;
+  total_balance_usdc: number;
+  operating_balance_usdc: number;
+  tax_reserve_balance_usdc: number;
+  contractor_balance_usdc: number;
+  hacker_balance_usdc: number;
+  nonce: number;
+  policy: SessionKeyPolicyDTO;
 }
 
-export interface ParsedIntent {
-  action: string;
-  recipient: string;
-  recipient_label?: string;
+export interface EscrowItemDTO {
+  escrow_id: number;
+  vault: string;
+  contractor: string;
+  contractor_label: string;
+  total_amount_usdc: number;
+  tax_withholding_bps: number;
+  estimated_contractor_payout_usdc: number;
+  estimated_tax_reserve_usdc: number;
+  description: string;
+  deliverable_spec_hash: string;
+  attestation_hash: string;
+  status: "FUNDED" | "SETTLED" | "REFUNDED" | string;
+  created_at: number;
+  settled_at: number;
+  tx_hash?: string | null;
+}
+
+export interface AuditEventDTO {
+  id: string;
+  timestamp: string;
+  event_type: "ESCROW_CREATED" | "WEBHOOK_VERIFIED" | "ESCROW_SETTLED" | "FIREWALL_BLOCKED" | "ONCHAIN_REVERT" | "POLICY_SYNC" | string;
+  severity: "INFO" | "SUCCESS" | "WARNING" | "CRITICAL" | string;
+  summary: string;
+  tx_hash?: string | null;
+  metadata: Record<string, string | number | boolean | null>;
+}
+
+export interface ParsedIntentDTO {
+  action_type: "CREATE_ESCROW" | "DIRECT_TRANSFER" | "MALICIOUS_APPROVE" | "UNKNOWN" | string;
+  recipient_label: string;
+  recipient_address: string;
   amount_usdc: number;
-  amount_units: number;
-  tax_reserve_bps: number;
-  tax_amount_usdc: number;
-  contractor_payout_usdc: number;
-  condition_type: string;
-  condition_description: string;
-  expected_attestation_hash: string;
-  duration_days: number;
-  confidence_score: number;
-  parser_mode: string;
-  raw_prompt: string;
+  tax_withholding_bps: number;
+  deliverable_description: string;
+  verification_source: string;
+  target_contract: string;
+  function_selector: string;
+  function_name: string;
+  encoded_calldata_preview: string;
+  confidence: number;
+  parser_mode: "llm" | "deterministic_fallback" | string;
+  prompt_injection_detected: boolean;
+  injection_indicators: string[];
 }
 
-export interface SimulationCheck {
-  name: string;
+export interface FirewallStageCheck {
+  check_name: string;
   passed: boolean;
   detail: string;
 }
 
-export interface SimulationResult {
-  is_valid: boolean;
-  gas_estimate: number;
-  simulated_revert_reason?: string | null;
-  checks: SimulationCheck[];
+export interface FirewallSimulationResult {
+  overall_approved: boolean;
+  stage1_offchain_passed: boolean;
+  stage2_onchain_simulation_passed: boolean;
+  stage1_checks: FirewallStageCheck[];
+  evm_simulation_status: "SUCCESS" | "REVERTED" | string;
+  evm_revert_reason?: string | null;
+  estimated_gas: number;
+  vault_balance_before_usdc: number;
+  vault_balance_after_usdc: number;
+  balance_delta_usdc: number;
+  risk_level: "LOW" | "HIGH" | "CRITICAL_BLOCKED" | string;
 }
 
-export interface IntentExecutionResponse {
-  status: string;
+export interface IntentParseAndSimulateResponse {
+  ok: boolean;
+  parsed_intent: ParsedIntentDTO;
+  firewall: FirewallSimulationResult;
+  executed: boolean;
   tx_hash?: string | null;
-  escrow_id?: string | null;
-  simulation: SimulationResult;
-  detail: string;
+  escrow?: EscrowItemDTO | null;
 }
 
-export interface EscrowItem {
-  escrow_id: string;
-  payer: string;
-  contractor: string;
-  token: string;
-  amount_usdc: number;
-  amount_units: number;
-  tax_reserve_bps: number;
-  tax_reserve_wallet: string;
-  tax_amount_usdc: number;
-  contractor_payout_usdc: number;
-  attestation_hash: string;
-  status: "Created" | "Settled" | "Refunded" | string;
-  created_at: number;
-  deadline: number;
-  is_expired: boolean;
-}
-
-export interface WebhookTriggerPayload {
-  event: string;
-  repository: string;
-  branch: string;
-  commit_sha: string;
-  status: "success" | "failure";
-  run_id: string;
-  escrow_id: string;
-}
-
-export interface WebhookSettlementResponse {
-  escrow_id: string;
-  attestation_hash: string;
-  status: string;
-  tx_hash: string;
-  contractor_payout_usdc: number;
-  tax_withheld_usdc: number;
-  verification_summary: string;
-}
-
-export interface FirewallRule {
+export interface RedTeamScenario {
   id: string;
-  name: string;
-  category: string;
-  description: string;
-  is_active: boolean;
-  enforcement_layer: string;
-}
-
-export interface RedTeamDefenseResponse {
-  scenario_id: string;
-  scenario_name: string;
+  title: string;
   category: string;
   prompt: string;
-  offchain_firewall_status: string;
-  offchain_firewall_rule: string;
-  offchain_defense_detail: string;
-  onchain_simulation_status: string;
-  onchain_revert_reason: string;
-  treasury_balance_before: number;
-  treasury_balance_after: number;
-  asset_loss: number;
-  defense_verdict: string;
-  timestamp: number;
+  target_recipient: string;
+  amount_usdc: number;
+  expected_solidity_error: string;
 }
 
-export interface AuditEvent {
-  id: string;
-  timestamp: number;
-  event_type: string;
-  actor: string;
-  summary: string;
-  details: Record<string, string | number | boolean>;
-  tx_hash?: string | null;
-  status: "INFO" | "SUCCESS" | "WARNING" | "BLOCKED" | string;
+export interface RedTeamAttackResponse {
+  scenario_id: string;
+  title: string;
+  adversarial_prompt: string;
+  parsed_intent: ParsedIntentDTO;
+  firewall: FirewallSimulationResult;
+  onchain_attempt_executed: boolean;
+  onchain_reverted_as_expected: boolean;
+  solidity_custom_error: string;
+  vault_balance_before_usdc: number;
+  vault_balance_after_usdc: number;
+  funds_lost_usdc: number;
+  audit_event: AuditEventDTO;
+}
+
+export interface VerifyWebhookResponse {
+  ok: boolean;
+  settled: boolean;
+  tx_hash?: string;
+  attestation_hash?: string;
+  contractor_payout_usdc?: number;
+  tax_withheld_usdc?: number;
+  reason?: string;
+  escrow?: EscrowItemDTO;
 }

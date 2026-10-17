@@ -1,10 +1,18 @@
 import React from "react";
-import { PolicyState } from "../types/api";
-import { ShieldCheck, Lock, Sliders, CheckCircle2, ArrowRight, FileCode2 } from "lucide-react";
+import { SessionKeyPolicyDTO } from "../types/api";
+import {
+  ShieldCheck,
+  Lock,
+  Calendar,
+  UserCheck,
+  CheckCircle2,
+  XCircle,
+  Code2,
+} from "lucide-react";
 
 interface PolicyGuardrailCardProps {
-  policy: PolicyState | null;
-  onOpenFirewallModal: () => void;
+  policy: SessionKeyPolicyDTO | null;
+  onOpenFirewallModal?: () => void;
 }
 
 export const PolicyGuardrailCard: React.FC<PolicyGuardrailCardProps> = ({
@@ -13,152 +21,155 @@ export const PolicyGuardrailCard: React.FC<PolicyGuardrailCardProps> = ({
 }) => {
   const maxPerTx = policy?.max_per_tx_usdc ?? 1500;
   const maxDaily = policy?.max_daily_usdc ?? 3000;
-  const currentDailySpent = policy?.current_daily_spent_usdc ?? 0;
-  const availableDaily = policy?.available_daily_usdc ?? 3000;
-  const taxBps = policy?.tax_reserve_bps ?? 1500;
-  const taxPct = (taxBps / 100).toFixed(1);
+  const spentToday = policy?.spent_today_usdc ?? 0;
+  const remainingDaily = policy?.remaining_daily_usdc ?? (maxDaily - spentToday);
+  const agentKey = policy?.session_key_address || "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 
-  const dailyUsagePercent = Math.min(100, Math.round((currentDailySpent / maxDaily) * 100));
+  const usagePercent = Math.min(100, Math.round((spentToday / maxDaily) * 100));
+
+  const formatAddress = (addr?: string) => {
+    if (!addr) return "0x000...0000";
+    return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
+  };
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-[#0f172a]/80 p-5 shadow-xl backdrop-blur-sm">
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-800 pb-4">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              On-Chain Session Key Guardrails
-              <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400 border border-emerald-500/20">
-                Solidity Enforced
-              </span>
-            </h2>
-            <p className="text-xs text-slate-400">
-              Decoupling probabilistic AI reasoning from deterministic on-chain settlement
+            <h3 className="text-sm font-bold text-slate-900">
+              On-Chain Session Key Policy
+            </h3>
+            <p className="text-xs font-mono text-slate-500">
+              Agent Key: {formatAddress(agentKey)}
             </p>
           </div>
         </div>
 
-        <button
-          onClick={onOpenFirewallModal}
-          className="flex items-center gap-1.5 rounded-lg border border-cyan-700/50 bg-cyan-950/40 hover:bg-cyan-900/40 px-3 py-1.5 text-xs font-medium text-cyan-300 transition-all hover:border-cyan-500"
-        >
-          <Sliders className="h-3.5 w-3.5 text-cyan-400" />
-          <span>Inspect Firewall Rules</span>
-          <ArrowRight className="h-3 w-3" />
-        </button>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 border border-emerald-200">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          ACTIVE • GUARDRAILS ENFORCED
+        </span>
       </div>
 
-      {/* Grid of Limits */}
-      <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Limit 1: Per-Tx Limit */}
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="flex items-center gap-1.5 font-medium text-slate-300">
-              <Lock className="h-3.5 w-3.5 text-cyan-400" />
-              Per-Tx Velocity Ceiling
+      {/* Spending Limits */}
+      <div className="mt-4 space-y-4">
+        {/* Limit 1: Per-Tx Ceiling */}
+        <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3.5">
+          <div className="flex items-center justify-between text-xs text-slate-500">
+            <span className="font-medium text-slate-700 flex items-center gap-1.5">
+              <Lock className="h-3.5 w-3.5 text-blue-600" />
+              Per-Transaction Ceiling
             </span>
-            <span className="text-[10px] rounded bg-slate-800 px-1.5 py-0.5 text-slate-400 font-mono">
-              Max Per-Tx
-            </span>
+            <span className="font-mono text-slate-400">Strict Cap</span>
           </div>
-          <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="font-mono text-xl font-bold text-white">
-              {maxPerTx.toLocaleString()}
+          <div className="mt-1 flex items-baseline justify-between">
+            <span className="font-mono text-xl font-bold text-slate-900 tabular-nums">
+              ${maxPerTx.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </span>
-            <span className="text-xs font-semibold text-cyan-400">USDC</span>
+            <span className="text-xs text-slate-500 font-mono">USDC / tx</span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-400">
-            Any single agent transaction exceeding this ceiling reverts on-chain instantly.
-          </p>
         </div>
 
-        {/* Limit 2: Daily Cumulative Limit */}
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="flex items-center gap-1.5 font-medium text-slate-300">
-              <Sliders className="h-3.5 w-3.5 text-cyan-400" />
-              24h Rolling Budget
+        {/* Limit 2: 24h Rolling Budget */}
+        <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3.5">
+          <div className="flex items-center justify-between text-xs text-slate-500">
+            <span className="font-medium text-slate-700 flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5 text-blue-600" />
+              24h Rolling Spend Usage
             </span>
-            <span className="font-mono text-[10px] text-slate-400">
-              {availableDaily.toLocaleString()} USDC Left
-            </span>
-          </div>
-
-          <div className="mt-2 flex items-baseline justify-between">
-            <div className="flex items-baseline gap-1.5">
-              <span className="font-mono text-xl font-bold text-white">
-                {maxDaily.toLocaleString()}
-              </span>
-              <span className="text-xs font-semibold text-cyan-400">USDC / Day</span>
-            </div>
-            <span className="font-mono text-xs text-slate-400">
-              Spent: ${currentDailySpent.toLocaleString()}
+            <span className="font-mono font-medium text-slate-700 tabular-nums">
+              ${spentToday.toLocaleString(undefined, { minimumFractionDigits: 2 })} / ${maxDaily.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </span>
           </div>
 
           {/* Progress Bar */}
-          <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-slate-800">
+          <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-slate-200">
             <div
               className={`h-full transition-all duration-500 rounded-full ${
-                dailyUsagePercent > 80 ? "bg-amber-500" : "bg-cyan-500"
+                usagePercent > 80 ? "bg-amber-500" : "bg-blue-600"
               }`}
-              style={{ width: `${dailyUsagePercent}%` }}
+              style={{ width: `${usagePercent}%` }}
             />
           </div>
-        </div>
 
-        {/* Limit 3: Automated Tax Reserve */}
-        <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="flex items-center gap-1.5 font-medium text-slate-300">
-              <ShieldCheck className="h-3.5 w-3.5 text-amber-400" />
-              Tax Reserve Withholding
-            </span>
-            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400 border border-amber-500/20">
-              {taxPct}% Fixed
+          <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
+            <span>Remaining today:</span>
+            <span className="font-mono font-bold text-slate-800 tabular-nums">
+              ${remainingDaily.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDC
             </span>
           </div>
-          <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="font-mono text-xl font-bold text-amber-300">
-              {taxBps}
+        </div>
+
+        {/* Whitelisted Recipients */}
+        <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3.5">
+          <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
+            <span className="font-medium text-slate-700 flex items-center gap-1.5">
+              <UserCheck className="h-3.5 w-3.5 text-blue-600" />
+              Whitelisted Recipient Allowlist
             </span>
-            <span className="text-xs font-semibold text-amber-400">Basis Points</span>
+            <span className="text-[10px] rounded bg-emerald-50 text-emerald-700 px-1.5 py-0.5 border border-emerald-200 font-medium">
+              1 Verified
+            </span>
           </div>
-          <p className="mt-1 text-[11px] text-slate-400">
-            Automated split: 85% paid to contractor, 15% isolated for tax obligations.
-          </p>
-        </div>
-      </div>
-
-      {/* Whitelist Tags Strip */}
-      <div className="mt-4 rounded-xl border border-slate-800/60 bg-slate-900/40 p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-slate-400 font-medium flex items-center gap-1">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-            Whitelisted Contractor:
-          </span>
-          <span className="font-mono text-cyan-300 bg-cyan-950/60 border border-cyan-800/50 px-2 py-0.5 rounded text-[11px]">
-            DevStudio (0x3C44...93BC)
-          </span>
-
-          <span className="text-slate-500">•</span>
-
-          <span className="text-slate-400 font-medium">Allowed Targets:</span>
-          <span className="font-mono text-slate-300 bg-slate-800 px-2 py-0.5 rounded text-[11px]">
-            MockUSDC
-          </span>
-          <span className="font-mono text-slate-300 bg-slate-800 px-2 py-0.5 rounded text-[11px]">
-            MilestoneEscrow
-          </span>
+          <div className="flex items-center justify-between rounded bg-white p-2 border border-slate-200 text-xs">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+              <span className="font-medium text-slate-800">DevStudio</span>
+            </div>
+            <span className="font-mono text-[11px] text-slate-500">
+              0x3C44...93BC
+            </span>
+          </div>
         </div>
 
-        <div className="flex items-center gap-1.5 text-slate-400 text-[11px]">
-          <FileCode2 className="h-3.5 w-3.5 text-slate-500" />
-          <span>Selector Whitelist: transfer, approve, createEscrow, settleEscrow</span>
+        {/* Contract & Function Selector Policy */}
+        <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3.5">
+          <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
+            <span className="font-medium text-slate-700 flex items-center gap-1.5">
+              <Code2 className="h-3.5 w-3.5 text-blue-600" />
+              Allowed Function Selectors
+            </span>
+            <span className="text-[10px] rounded bg-blue-50 text-blue-700 px-1.5 py-0.5 border border-blue-200 font-medium">
+              3 Permitted
+            </span>
+          </div>
+          <div className="space-y-1.5 font-mono text-[11px]">
+            <div className="flex items-center justify-between rounded bg-white px-2 py-1 border border-slate-200">
+              <span className="text-slate-700">MilestoneEscrow.createEscrow</span>
+              <span className="text-emerald-700 font-bold">0x0a1d5e6d</span>
+            </div>
+            <div className="flex items-center justify-between rounded bg-white px-2 py-1 border border-slate-200">
+              <span className="text-slate-700">MilestoneEscrow.releaseMilestone</span>
+              <span className="text-emerald-700 font-bold">0xb20616e0</span>
+            </div>
+            <div className="flex items-center justify-between rounded bg-white px-2 py-1 border border-slate-200">
+              <span className="text-slate-700">MockUSDC.transfer</span>
+              <span className="text-emerald-700 font-bold">0xa9059cbb</span>
+            </div>
+            <div className="flex items-center justify-between rounded bg-rose-50 px-2 py-1 border border-rose-200 text-rose-800">
+              <span className="flex items-center gap-1">
+                <XCircle className="h-3 w-3 text-rose-600" />
+                MockUSDC.approve
+              </span>
+              <span className="font-bold text-rose-700">BLOCKED (0x095ea7b3)</span>
+            </div>
+          </div>
         </div>
+
+        {onOpenFirewallModal && (
+          <button
+            onClick={onOpenFirewallModal}
+            className="w-full mt-3 inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+          >
+            <ShieldCheck className="h-3.5 w-3.5 text-blue-700" />
+            <span>Inspect 2-Stage Firewall & Guardrails Matrix</span>
+          </button>
+        )}
       </div>
     </div>
   );

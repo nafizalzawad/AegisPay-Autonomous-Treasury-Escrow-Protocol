@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { VaultStatus, EscrowItem, AuditEvent } from "./types/api";
+import { VaultStateResponse, EscrowItemDTO, AuditEventDTO } from "./types/api";
 import { apiClient } from "./services/apiClient";
 import { HeaderTelemetry } from "./components/HeaderTelemetry";
 import { PolicyGuardrailCard } from "./components/PolicyGuardrailCard";
@@ -11,9 +11,9 @@ import { AuditTrailFeed } from "./components/AuditTrailFeed";
 import { Shield } from "lucide-react";
 
 export const App: React.FC = () => {
-  const [vault, setVault] = useState<VaultStatus | null>(null);
-  const [escrows, setEscrows] = useState<EscrowItem[]>([]);
-  const [auditTrail, setAuditTrail] = useState<AuditEvent[]>([]);
+  const [vault, setVault] = useState<VaultStateResponse | null>(null);
+  const [escrows, setEscrows] = useState<EscrowItemDTO[]>([]);
+  const [auditTrail, setAuditTrail] = useState<AuditEventDTO[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [firewallModalOpen, setFirewallModalOpen] = useState<boolean>(false);
 
@@ -21,9 +21,18 @@ export const App: React.FC = () => {
     try {
       setLoading(true);
       const [vData, eData, aData] = await Promise.all([
-        apiClient.getVaultStatus().catch(() => null),
-        apiClient.listEscrows().catch(() => []),
-        apiClient.getAuditTrail().catch(() => []),
+        apiClient.getVaultState().catch((err) => {
+          console.error("Failed to fetch vault state:", err);
+          return null;
+        }),
+        apiClient.listEscrows().catch((err) => {
+          console.error("Failed to list escrows:", err);
+          return [];
+        }),
+        apiClient.getAuditLog(50).catch((err) => {
+          console.error("Failed to get audit log:", err);
+          return [];
+        }),
       ]);
 
       if (vData) setVault(vData);
@@ -36,66 +45,76 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     fetchAllData();
-    // Poll every 8 seconds for background on-chain updates
-    const interval = setInterval(fetchAllData, 8000);
+    // Background polling every 10 seconds for on-chain state sync
+    const interval = setInterval(fetchAllData, 10000);
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
   return (
-    <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col font-sans">
-      {/* Institutional Telemetry Header */}
-      <HeaderTelemetry
-        vault={vault}
-        loading={loading}
-        onRefresh={fetchAllData}
-      />
-
-      {/* Main Dashboard Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
-        {/* Row 1: Session Key Guardrail Telemetry */}
-        <PolicyGuardrailCard
-          policy={vault?.policy || null}
-          onOpenFirewallModal={() => setFirewallModalOpen(true)}
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
+      {/* Institutional Top Navbar & Telemetry KPIs */}
+      <div className="max-w-7xl w-full mx-auto p-4 sm:p-6 pb-0">
+        <HeaderTelemetry
+          vault={vault}
+          loading={loading}
+          onRefresh={fetchAllData}
         />
+      </div>
 
-        {/* Row 2: Two-Column Split: Intent Terminal & Escrow Lifecycle */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          {/* Col 1: Natural Language Commercial Intent */}
-          <IntentTerminal onEscrowCreated={fetchAllData} />
+      {/* Main Command Center Grid */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+        {/* 12-Column Responsive Split */}
+        <div className="grid grid-cols-12 gap-6 items-start">
+          {/* Left Column (7 cols on lg): Natural Language Intent + Escrow Lifecycle */}
+          <div className="col-span-12 lg:col-span-7 space-y-6">
+            <IntentTerminal onEscrowCreated={fetchAllData} />
+            <EscrowLifecyclePanel
+              escrows={escrows}
+              loading={loading}
+              onSettled={fetchAllData}
+            />
+          </div>
 
-          {/* Col 2: Autonomous Perception & CI/CD Settlement */}
-          <EscrowLifecyclePanel
-            escrows={escrows}
-            loading={loading}
-            onSettled={fetchAllData}
-          />
+          {/* Right Column (5 cols on lg): Policy Guardrails + Red-Team Arena */}
+          <div className="col-span-12 lg:col-span-5 space-y-6">
+            <PolicyGuardrailCard
+              policy={vault?.policy || null}
+              onOpenFirewallModal={() => setFirewallModalOpen(true)}
+            />
+            <RedTeamArena onAttackFinished={fetchAllData} />
+          </div>
         </div>
 
-        {/* Row 3: Live Red-Team Adversarial Defense Arena */}
-        <RedTeamArena onAttackFinished={fetchAllData} />
-
-        {/* Row 4: Real-time Immutable Audit Trail Feed */}
+        {/* Full-Width Immutable Audit Trail Feed */}
         <AuditTrailFeed
           events={auditTrail}
           loading={loading}
         />
       </main>
 
-      {/* Firewall & Solidity Policy Inspector Modal */}
+      {/* 2-Stage Firewall & Solidity Policy Inspector Modal */}
       <FirewallInspectorModal
         isOpen={firewallModalOpen}
         onClose={() => setFirewallModalOpen(false)}
+        policy={vault?.policy || null}
       />
 
-      {/* Footer */}
-      <footer className="border-t border-slate-800 bg-[#0c121e] px-6 py-4 mt-8 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Shield className="h-4 w-4 text-cyan-400" />
-          <span className="font-semibold text-slate-400">AegisPay Protocol</span>
-          <span>• 2026 Shenzhen International FinTech Competition (Tsinghua PBCSF & WeBank)</span>
-        </div>
-        <div className="font-mono text-[11px] text-slate-400">
-          Decoupled AI Perception & Deterministic On-Chain Settlement
+      {/* Institutional Footer */}
+      <footer className="border-t border-slate-200 bg-white px-6 py-4 mt-8 text-xs text-slate-500">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Shield className="h-4 w-4 text-blue-700" />
+            <span className="font-bold text-slate-800">AegisPay Smart Treasury Architecture</span>
+            <span className="text-slate-400">•</span>
+            <span>2026 Shenzhen International FinTech Competition (Tsinghua PBCSF & WeBank)</span>
+          </div>
+          <div className="flex items-center gap-2 font-mono text-[11px] text-slate-500">
+            <span>Decoupled AI Perception</span>
+            <span className="text-slate-400">→</span>
+            <span>2-Stage Pre-Execution Firewall</span>
+            <span className="text-slate-400">→</span>
+            <span className="font-semibold text-slate-700">Deterministic Solidity Settlement</span>
+          </div>
         </div>
       </footer>
     </div>

@@ -1,15 +1,14 @@
 import React, { useState } from "react";
-import { EscrowItem, WebhookSettlementResponse } from "../types/api";
+import { EscrowItemDTO, VerifyWebhookResponse } from "../types/api";
 import { apiClient } from "../services/apiClient";
 import {
   GitPullRequest,
   CheckCircle2,
-  Sparkles,
   AlertTriangle,
 } from "lucide-react";
 
 interface EscrowLifecyclePanelProps {
-  escrows: EscrowItem[];
+  escrows: EscrowItemDTO[];
   loading?: boolean;
   onSettled: () => void;
 }
@@ -18,28 +17,36 @@ export const EscrowLifecyclePanel: React.FC<EscrowLifecyclePanelProps> = ({
   escrows,
   onSettled,
 }) => {
-  const [triggeringId, setTriggeringId] = useState<string | null>(null);
-  const [settlementResult, setSettlementResult] = useState<WebhookSettlementResponse | null>(null);
+  const [triggeringId, setTriggeringId] = useState<number | null>(null);
+  const [failingWarning, setFailingWarning] = useState<string | null>(null);
+  const [settledResult, setSettledResult] = useState<VerifyWebhookResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleSimulateWebhook = async (escrowId: string, status: "success" | "failure") => {
+  const handleSimulateWebhook = async (escrowId: number, testsPassed: boolean) => {
     try {
       setTriggeringId(escrowId);
       setErrorMessage(null);
-      setSettlementResult(null);
+      setFailingWarning(null);
+      setSettledResult(null);
 
-      const res = await apiClient.triggerGithubWebhook({
-        event: "workflow_run.completed",
-        repository: "AegisPay/smart-treasury-suite",
-        branch: "main",
-        commit_sha: "4a9f3b18c72e9d0e",
-        status,
-        run_id: "94827103",
+      const res = await apiClient.verifyWebhook({
         escrow_id: escrowId,
+        provider: "github_actions",
+        repo_or_tracking_id: "AegisPay/smart-treasury-suite",
+        commit_sha_or_waybill: "4a9f3b18c72e9d0e",
+        tests_passed: testsPassed,
+        passed_count: testsPassed ? 42 : 39,
+        failed_count: testsPassed ? 0 : 3,
       });
 
-      setSettlementResult(res);
-      onSettled();
+      if (!testsPassed || !res.settled) {
+        setFailingWarning(
+          "Agent refused settlement: CI verification failed (3 failing tests). Funds remain locked in escrow."
+        );
+      } else {
+        setSettledResult(res);
+        onSettled();
+      }
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : String(err));
     } finally {
@@ -48,207 +55,201 @@ export const EscrowLifecyclePanel: React.FC<EscrowLifecyclePanelProps> = ({
   };
 
   const formatHash = (hash?: string) => {
-    if (!hash) return "";
-    return `${hash.substring(0, 8)}...${hash.substring(hash.length - 6)}`;
+    if (!hash || hash === "0x0000000000000000000000000000000000000000000000000000000000000000") {
+      return "Pending Verification Proof";
+    }
+    return `${hash.substring(0, 10)}...${hash.substring(hash.length - 8)}`;
   };
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-[#0f172a]/80 p-5 shadow-xl backdrop-blur-sm">
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-800 pb-4">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
             <GitPullRequest className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              Autonomous Perception & Milestone Escrows
-              <span className="rounded bg-emerald-950/80 px-2 py-0.5 text-[10px] font-semibold text-emerald-400 border border-emerald-800/60">
-                GitHub CI/CD Verifier
-              </span>
+            <h2 className="text-sm font-bold text-slate-900">
+              Autonomous Delivery Perception & Milestone Escrows
             </h2>
-            <p className="text-xs text-slate-400">
-              Contract milestones automatically settled upon external proof attestation verification
+            <p className="text-xs text-slate-500">
+              Milestone Escrow contracts settled upon cryptographic delivery attestation proofs
             </p>
           </div>
         </div>
 
-        <span className="text-xs text-slate-400 font-mono">
-          Total Escrows: {escrows.length}
+        <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600 border border-slate-200">
+          {escrows.length} {escrows.length === 1 ? "Agreement" : "Agreements"}
         </span>
       </div>
 
-      {/* Settlement Success Banner */}
-      {settlementResult && (
-        <div className="mt-4 rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-4 text-xs text-emerald-200 animate-fade-in shadow-lg shadow-emerald-500/10">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 font-bold text-sm text-emerald-400">
-              <CheckCircle2 className="h-4 w-4" />
-              Autonomous Perception Settlement Complete!
-            </div>
-            <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-mono text-emerald-300 border border-emerald-500/30">
-              Tx: {formatHash(settlementResult.tx_hash)}
-            </span>
-          </div>
-
-          <p className="mt-1 text-slate-300">
-            {settlementResult.verification_summary}
-          </p>
-
-          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-[11px]">
-            <div className="rounded bg-slate-900/80 p-2 border border-slate-800">
-              <span className="text-slate-400 block text-[10px]">Contractor Disbursed (85%)</span>
-              <span className="font-bold text-emerald-400">
-                +${settlementResult.contractor_payout_usdc.toLocaleString()} USDC
-              </span>
-            </div>
-
-            <div className="rounded bg-slate-900/80 p-2 border border-slate-800">
-              <span className="text-slate-400 block text-[10px]">Tax Reserve Remitted (15%)</span>
-              <span className="font-bold text-amber-400">
-                +${settlementResult.tax_withheld_usdc.toLocaleString()} USDC
-              </span>
-            </div>
-
-            <div className="rounded bg-slate-900/80 p-2 border border-slate-800 col-span-2 sm:col-span-1">
-              <span className="text-slate-400 block text-[10px]">Verified Proof</span>
-              <span className="text-cyan-300 truncate block">
-                {formatHash(settlementResult.attestation_hash)}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Error Message */}
+      {/* Warnings & Result Banners */}
       {errorMessage && (
-        <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-950/20 p-3 text-xs text-rose-300 flex items-start gap-2">
-          <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+        <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
+          <div>{errorMessage}</div>
+        </div>
+      )}
+
+      {failingWarning && (
+        <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 animate-fade-in">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
           <div>
-            <span className="font-semibold">Webhook Error: </span>
-            {errorMessage}
+            <span className="font-semibold block">Settlement Blocked:</span>
+            {failingWarning}
           </div>
         </div>
       )}
 
-      {/* Escrow Items List */}
-      <div className="mt-4 space-y-3">
-        {escrows.length === 0 ? (
-          <div className="rounded-xl border border-slate-800/80 bg-slate-900/30 p-8 text-center text-xs text-slate-500">
-            No active escrows found. Submit an agreement above to create the first milestone escrow.
+      {settledResult && (
+        <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-950 animate-fade-in">
+          <div className="flex items-center gap-2 font-semibold">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <span>Autonomous Settlement Verified On-Chain!</span>
           </div>
-        ) : (
-          escrows.map((escrow) => {
-            const isCreated = escrow.status === "Created";
-            const isSettled = escrow.status === "Settled";
-            const isBusy = triggeringId === escrow.escrow_id;
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-[11px]">
+            <div className="rounded bg-white p-2 border border-emerald-200">
+              <span className="text-slate-500 block text-[10px]">Net Payout to DevStudio (85%)</span>
+              <span className="font-bold text-emerald-700 text-sm">
+                +${settledResult.contractor_payout_usdc?.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDC
+              </span>
+            </div>
+            <div className="rounded bg-white p-2 border border-emerald-200">
+              <span className="text-slate-500 block text-[10px]">Tax Withheld to Reserve (15%)</span>
+              <span className="font-bold text-amber-700 text-sm">
+                +${settledResult.tax_withheld_usdc?.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDC
+              </span>
+            </div>
+          </div>
+          {settledResult.attestation_hash && (
+            <p className="mt-2 text-[11px] font-mono text-slate-600 break-all">
+              SHA-256 Attestation: {settledResult.attestation_hash}
+            </p>
+          )}
+        </div>
+      )}
 
-            return (
-              <div
-                key={escrow.escrow_id}
-                className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-all hover:border-slate-700"
-              >
-                {/* Item Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-800/70 pb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-semibold text-white">
-                      Escrow: {formatHash(escrow.escrow_id)}
-                    </span>
-                    <span className="text-slate-500 text-xs">•</span>
-                    <span className="font-mono text-xs text-cyan-300">
-                      DevStudio (0x3C44...93BC)
-                    </span>
-                  </div>
+      {/* Escrow List */}
+      <div className="mt-4 space-y-4">
+        {escrows.map((item) => {
+          const isFunded = item.status === "FUNDED";
+          const isTriggering = triggeringId === item.escrow_id;
 
-                  {/* Status Badge */}
-                  <div>
-                    {isCreated ? (
-                      <span className="rounded-full bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-400 border border-amber-500/20 flex items-center gap-1.5">
-                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-                        Awaiting CI/CD Perception Webhook
-                      </span>
-                    ) : isSettled ? (
-                      <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
-                        <CheckCircle2 className="h-3 w-3 text-emerald-400" />
-                        Settled & Disbursed
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-[11px] font-semibold text-slate-400">
-                        {escrow.status}
-                      </span>
-                    )}
-                  </div>
+          return (
+            <div
+              key={item.escrow_id}
+              className={`rounded-xl border p-4 transition-all ${
+                isFunded
+                  ? "border-amber-200 bg-amber-50/20"
+                  : "border-slate-200 bg-white"
+              }`}
+            >
+              {/* Escrow Item Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="font-mono text-xs font-bold text-slate-800">
+                    Escrow #{item.escrow_id}
+                  </span>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
+                      isFunded
+                        ? "bg-amber-50 text-amber-800 border-amber-200"
+                        : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    }`}
+                  >
+                    {item.status}
+                  </span>
+                  <span className="text-xs text-slate-500 font-medium truncate max-w-xs">
+                    {item.contractor_label}
+                  </span>
                 </div>
 
-                {/* Amount & Split Breakdown */}
-                <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                  <div>
-                    <span className="text-slate-400 text-[11px]">Total Locked</span>
-                    <p className="font-mono font-bold text-white text-sm">
-                      ${escrow.amount_usdc.toLocaleString()} USDC
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 text-[11px]">Contractor Payout (85%)</span>
-                    <p className="font-mono font-bold text-emerald-400 text-sm">
-                      ${escrow.contractor_payout_usdc.toLocaleString()} USDC
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 text-[11px]">Tax Reserve (15%)</span>
-                    <p className="font-mono font-bold text-amber-400 text-sm">
-                      ${escrow.tax_amount_usdc.toLocaleString()} USDC
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 text-[11px]">Delivery Verification</span>
-                    <p className="text-slate-300 text-xs truncate">
-                      GitHub Actions CI/CD
-                    </p>
-                  </div>
+                <div className="font-mono text-base font-bold text-slate-900 tabular-nums">
+                  ${item.total_amount_usdc.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDC
                 </div>
-
-                {/* Simulated Trigger Actions */}
-                {isCreated && (
-                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
-                    <span className="text-xs text-slate-400 font-mono text-[11px]">
-                      Expected Proof: {formatHash(escrow.attestation_hash)}
-                    </span>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleSimulateWebhook(escrow.escrow_id, "failure")}
-                        disabled={isBusy}
-                        className="rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-50 text-[11px]"
-                        title="Simulate CI build failure to verify rejection"
-                      >
-                        Simulate CI Failure
-                      </button>
-
-                      <button
-                        onClick={() => handleSimulateWebhook(escrow.escrow_id, "success")}
-                        disabled={isBusy}
-                        className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 px-3.5 py-1.5 text-xs font-semibold text-black shadow-lg shadow-emerald-500/20 hover:from-emerald-400 hover:to-teal-500 transition-all disabled:opacity-50"
-                      >
-                        {isBusy ? (
-                          <>
-                            <div className="h-3 w-3 animate-spin rounded-full border-2 border-black border-t-transparent" />
-                            <span>Verifying & Settling...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="h-3.5 w-3.5" />
-                            <span>[Simulated Webhook Trigger] Trigger GitHub CI/CD Pass</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
-            );
-          })
-        )}
+
+              {/* Description */}
+              <p className="mt-2.5 text-xs text-slate-700 font-medium">
+                "{item.description}"
+              </p>
+
+              {/* Financial Split Breakdown */}
+              <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-100">
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+                    <span>Contractor Net (85%)</span>
+                    <span className="font-mono font-medium text-emerald-700">Payout</span>
+                  </div>
+                  <span className="font-mono text-sm font-bold text-slate-900 tabular-nums">
+                    ${item.estimated_contractor_payout_usdc.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDC
+                  </span>
+                </div>
+
+                <div className="rounded-lg bg-slate-50 p-2.5 border border-slate-100">
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+                    <span>Tax Withholding ({item.tax_withholding_bps / 100}%)</span>
+                    <span className="font-mono font-medium text-amber-700">Reserve</span>
+                  </div>
+                  <span className="font-mono text-sm font-bold text-slate-900 tabular-nums">
+                    ${item.estimated_tax_reserve_usdc.toLocaleString(undefined, { minimumFractionDigits: 2 })} USDC
+                  </span>
+                </div>
+              </div>
+
+              {/* Hashes & Metadata */}
+              <div className="mt-3 space-y-1 font-mono text-[11px] text-slate-500">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Spec Hash:</span>
+                  <span className="text-slate-600 truncate max-w-xs">{formatHash(item.deliverable_spec_hash)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Attestation:</span>
+                  <span className="text-slate-600 truncate max-w-xs">{formatHash(item.attestation_hash)}</span>
+                </div>
+              </div>
+
+              {/* Webhook Action Triggers (Visible for FUNDED Escrows) */}
+              {isFunded && (
+                <div className="mt-4 border-t border-slate-100 pt-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Autonomous Trigger Simulation
+                    </span>
+                    <span className="font-mono text-[10px] text-slate-400">
+                      [Simulated External Webhook Trigger]
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    {/* Passing Webhook Button */}
+                    <button
+                      onClick={() => handleSimulateWebhook(item.escrow_id, true)}
+                      disabled={isTriggering}
+                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                      title="Trigger GitHub Actions completed webhook with 42/42 tests passing"
+                    >
+                      <CheckCircle2 className={`h-3.5 w-3.5 ${isTriggering ? "animate-spin" : ""}`} />
+                      <span>Simulate Passing GitHub CI Webhook (42/42 Tests)</span>
+                    </button>
+
+                    {/* Failing Webhook Button */}
+                    <button
+                      onClick={() => handleSimulateWebhook(item.escrow_id, false)}
+                      disabled={isTriggering}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                      title="Simulate failing CI run with 3 failing tests"
+                    >
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                      <span>Failing CI Webhook (3 Failed)</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
