@@ -71,6 +71,8 @@ class Settings:
     # Shared file paths
     CONSTANTS_FILE: Path = SHARED_DIR / "constants.json"
     DEPLOYMENTS_FILE: Path = SHARED_DIR / "deployments.local.json"
+    CONTRACTS_DIR: Path = ROOT_DIR / "contracts"
+    OUT_DIR: Path = CONTRACTS_DIR / "out"
 
     def load_constants(self) -> Dict[str, Any]:
         if self.CONSTANTS_FILE.exists():
@@ -83,6 +85,14 @@ class Settings:
             with open(self.DEPLOYMENTS_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         return {"contracts": {}, "accounts": {}}
+
+    def load_abi(self, contract_name: str) -> list:
+        abi_path = self.OUT_DIR / f"{contract_name}.sol" / f"{contract_name}.json"
+        if abi_path.exists():
+            with open(abi_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("abi", [])
+        return []
 
 
 settings = Settings()

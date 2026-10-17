@@ -1,124 +1,78 @@
-from typing import Dict, Any
+from typing import Dict, Any, List
 from fastapi import APIRouter, HTTPException
 from web3 import Web3
 
 from app.config import settings
-from app.schemas import ApiResponse, VaultStatusResponse, PolicyState, FaucetRequest
+from app.schemas import (
+    ApiResponse,
+    VaultStatusResponse,
+    PolicyState,
+    FaucetRequest,
+    VaultStateResponse,
+    AuditEventDTO,
+)
 from app.blockchain import blockchain_service
 
 router = APIRouter(prefix="/vault", tags=["Vault & Policy"])
 
 
+@router.get("/state", response_model=VaultStateResponse)
+async def get_vault_state():
+    """Returns live on-chain AegisVault state, token balances, and active session policy"""
+    return blockchain_service.get_vault_state()
+
+
+@router.get("/audit-log", response_model=List[AuditEventDTO])
+async def get_vault_audit_log(limit: int = 50):
+    """Returns chronological audit log entries"""
+    return blockchain_service.get_audit_dtos(limit=limit)
+
+
+@router.post("/reset-demo")
+async def reset_demo():
+    """Re-deploys and re-seeds the sandbox environment to clean initial balances"""
+    return blockchain_service.reset_demo()
+
+
+# Legacy / backward-compatible endpoints
+
 @router.get("/status", response_model=ApiResponse[VaultStatusResponse])
 async def get_vault_status():
-    """Returns real-time treasury balances, tax reserve metrics, and active session policy"""
+    """Legacy endpoint: Returns real-time treasury balances, tax reserve metrics, and active session policy"""
     try:
-        contracts = blockchain_service.get_contract_addresses()
-        vault_addr = contracts.get("AegisVault", "")
-        usdc_addr = contracts.get("MockUSDC", "")
-        escrow_addr = contracts.get("MilestoneEscrow", "")
-
-        usdc_contract = blockchain_service.get_usdc_contract()
-        vault_contract = blockchain_service.get_vault_contract()
-
-        usdc_balance = 0.0
-        usdc_balance_units = 0
-        tax_reserve_balance = 0.0
-        tax_reserve_units = 0
-        eth_balance = 0.0
-
-        # Default policy parameters
-        policy_agent = settings.AGENT_ADDRESS
-        max_per_tx_units = 1500 * 10**6
-        max_daily_units = 3000 * 10**6
-        current_daily_spent_units = 0
-        valid_until = 1893456000  # Future timestamp
-        tax_bps = 1500
-        tax_wallet = vault_addr or settings.OWNER_ADDRESS
-        is_active = True
-        available_daily_units = max_daily_units
-
-        whitelisted_recipients = [settings.CONTRACTOR_ADDRESS]
-        whitelisted_targets = [usdc_addr, escrow_addr]
-        whitelisted_selectors = [
-            "0xa9059cbb",  # transfer
-            "0x095ea7b3",  # approve
-            "0x0a1d5e6d",  # createEscrow
-            "0xb20616e0",  # settleEscrow
-            "0x47aed508",  # refundEscrow
-        ]
-
-        if blockchain_service.is_connected() and vault_addr and usdc_contract and vault_contract:
-            try:
-                raw_usdc_bal = usdc_contract.functions.balanceOf(
-                    Web3.to_checksum_address(vault_addr)
-                ).call()
-                usdc_balance_units = int(raw_usdc_bal)
-                usdc_balance = round(raw_usdc_bal / 10**6, 2)
-
-                raw_tax_bal = vault_contract.functions.taxReserveBalance().call()
-                tax_reserve_units = int(raw_tax_bal)
-                tax_reserve_balance = round(raw_tax_bal / 10**6, 2)
-
-                raw_eth = blockchain_service.w3.eth.get_balance(
-                    Web3.to_checksum_address(vault_addr)
-                )
-                eth_balance = round(raw_eth / 10**18, 4)
-
-                # Fetch on-chain policy
-                policy_raw = vault_contract.functions.policy().call()
-                # policy returns: (agent, maxPerTx, maxDaily, currentDailySpent, lastDailyReset, validUntil, taxReserveBps, taxReserveWallet, isActive)
-                policy_agent = policy_raw[0]
-                max_per_tx_units = int(policy_raw[1])
-                max_daily_units = int(policy_raw[2])
-                current_daily_spent_units = int(policy_raw[3])
-                valid_until = int(policy_raw[5])
-                tax_bps = int(policy_raw[6])
-                tax_wallet = policy_raw[7]
-                is_active = bool(policy_raw[8])
-
-                raw_avail = vault_contract.functions.getAvailableDailyLimit().call()
-                available_daily_units = int(raw_avail)
-            except Exception as e:
-                # Fallback to simulated defaults if contract queries fail
-                pass
-        else:
-            # Fallback values when chain is offline or initializing
-            usdc_balance = 100000.0
-            usdc_balance_units = 100000 * 10**6
-            eth_balance = 10.0
+        state = blockchain_service.get_vault_state()
 
         policy_state = PolicyState(
-            agent=policy_agent,
-            max_per_tx_usdc=round(max_per_tx_units / 10**6, 2),
-            max_per_tx_units=max_per_tx_units,
-            max_daily_usdc=round(max_daily_units / 10**6, 2),
-            max_daily_units=max_daily_units,
-            current_daily_spent_usdc=round(current_daily_spent_units / 10**6, 2),
-            current_daily_spent_units=current_daily_spent_units,
-            available_daily_usdc=round(available_daily_units / 10**6, 2),
-            valid_until=valid_until,
+            agent=state.policy.session_key_address,
+            max_per_tx_usdc=state.policy.max_per_tx_usdc,
+            max_per_tx_units=int(state.policy.max_per_tx_usdc * 1e6),
+            max_daily_usdc=state.policy.max_daily_usdc,
+            max_daily_units=int(state.policy.max_daily_usdc * 1e6),
+            current_daily_spent_usdc=state.policy.spent_today_usdc,
+            current_daily_spent_units=int(state.policy.spent_today_usdc * 1e6),
+            available_daily_usdc=state.policy.remaining_daily_usdc,
+            valid_until=state.policy.expires_at,
             is_expired=False,
-            tax_reserve_bps=tax_bps,
-            tax_reserve_wallet=tax_wallet,
-            is_active=is_active,
-            whitelisted_recipients=whitelisted_recipients,
-            whitelisted_targets=whitelisted_targets,
-            whitelisted_selectors=whitelisted_selectors,
+            tax_reserve_bps=1500,
+            tax_reserve_wallet=state.vault_address,
+            is_active=state.policy.is_active,
+            whitelisted_recipients=[r["address"] for r in state.policy.whitelisted_recipients],
+            whitelisted_targets=[state.usdc_address, state.escrow_contract_address],
+            whitelisted_selectors=[s["selector"] for s in state.policy.allowed_selectors],
         )
 
         resp = VaultStatusResponse(
-            vault_address=vault_addr or "0x0000000000000000000000000000000000000000",
-            usdc_token_address=usdc_addr or "0x0000000000000000000000000000000000000000",
-            escrow_contract_address=escrow_addr or "0x0000000000000000000000000000000000000000",
-            usdc_balance=usdc_balance,
-            usdc_balance_units=usdc_balance_units,
-            native_eth_balance=eth_balance,
-            tax_reserve_balance=tax_reserve_balance,
-            tax_reserve_balance_units=tax_reserve_units,
+            vault_address=state.vault_address,
+            usdc_token_address=state.usdc_address,
+            escrow_contract_address=state.escrow_contract_address,
+            usdc_balance=state.total_balance_usdc,
+            usdc_balance_units=int(state.total_balance_usdc * 1e6),
+            native_eth_balance=10.0,
+            tax_reserve_balance=state.tax_reserve_balance_usdc,
+            tax_reserve_balance_units=int(state.tax_reserve_balance_usdc * 1e6),
             policy=policy_state,
             network="Anvil Local Sandbox",
-            chain_id=settings.CHAIN_ID,
+            chain_id=state.chain_id,
         )
 
         return ApiResponse(ok=True, data=resp)
@@ -131,7 +85,7 @@ async def request_faucet(payload: FaucetRequest):
     """Mints sandbox MockUSDC to test accounts (up to 5,000 USDC)"""
     try:
         contracts = blockchain_service.get_contract_addresses()
-        usdc_addr = contracts.get("MockUSDC")
+        usdc_addr = contracts.get("MockUSDC") or contracts.get("mockUsdc")
         if not usdc_addr or not blockchain_service.is_connected():
             return ApiResponse(
                 ok=True,

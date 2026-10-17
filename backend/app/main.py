@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
 from app.config import settings
+from app.blockchain import blockchain_service
 from app.routes import vault, intent, escrow, security
 
 app = FastAPI(
@@ -65,10 +66,29 @@ async def health_check():
     }
 
 
-# Register API Route Handlers
+@app.get("/api/v1/health")
+async def health_v1():
+    deps = settings.load_deployments()
+    contracts = deps.get("contracts", {})
+    vault_addr = contracts.get("AegisVault") or contracts.get("aegisVault") or ""
+    return {
+        "ok": True,
+        "chain_connected": blockchain_service.is_connected(),
+        "chain_id": settings.CHAIN_ID,
+        "vault_address": vault_addr,
+        "llm_mode": settings.LLM_PROVIDER,
+    }
+
+
+# Register API Route Handlers under /api/v1 (primary) and /api (legacy)
+app.include_router(vault.router, prefix="/api/v1")
+app.include_router(escrow.router, prefix="/api/v1")
+app.include_router(intent.router, prefix="/api/v1")
+app.include_router(security.router, prefix="/api/v1")
+
 app.include_router(vault.router, prefix="/api")
-app.include_router(intent.router, prefix="/api")
 app.include_router(escrow.router, prefix="/api")
+app.include_router(intent.router, prefix="/api")
 app.include_router(security.router, prefix="/api")
 
 

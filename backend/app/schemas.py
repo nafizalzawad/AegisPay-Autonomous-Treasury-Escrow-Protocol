@@ -12,7 +12,81 @@ class ApiResponse(BaseModel, Generic[T]):
     detail: Optional[str] = None
 
 
-# --- Vault & Policy Schemas ---
+# --- Phase 2 DTOs: Vault, Policy, Escrow, Webhook, and Audit Schemas ---
+
+class SessionKeyPolicyDTO(BaseModel):
+    session_key_address: str
+    is_active: bool
+    expires_at: int
+    max_per_tx_usdc: float
+    max_daily_usdc: float
+    spent_today_usdc: float
+    remaining_daily_usdc: float
+    whitelisted_recipients: List[Dict[str, str]] = Field(default_factory=list)
+    allowed_selectors: List[Dict[str, str]] = Field(default_factory=list)
+
+
+class VaultStateResponse(BaseModel):
+    chain_id: int
+    vault_address: str
+    owner_address: str
+    usdc_address: str
+    escrow_contract_address: str
+    total_balance_usdc: float
+    operating_balance_usdc: float
+    tax_reserve_balance_usdc: float
+    contractor_balance_usdc: float
+    hacker_balance_usdc: float
+    nonce: int
+    policy: SessionKeyPolicyDTO
+
+
+class EscrowItemDTO(BaseModel):
+    escrow_id: int
+    vault: str
+    contractor: str
+    contractor_label: str
+    total_amount_usdc: float
+    tax_withholding_bps: int
+    estimated_contractor_payout_usdc: float
+    estimated_tax_reserve_usdc: float
+    description: str
+    deliverable_spec_hash: str
+    attestation_hash: str
+    status: str = Field(..., description="'FUNDED' | 'SETTLED' | 'REFUNDED'")
+    created_at: int
+    settled_at: int
+    tx_hash: Optional[str] = None
+
+
+class CreateEscrowRequest(BaseModel):
+    contractor_address: str
+    amount_usdc: float = Field(gt=0)
+    tax_withholding_bps: int = Field(ge=0, le=5000, default=1500)
+    description: str = Field(min_length=3, max_length=500)
+
+
+class VerifyWebhookRequest(BaseModel):
+    escrow_id: int
+    provider: str = Field(default="github_actions", description="'github_actions' | 'dhl_logistics' | 'postman_monitor'")
+    repo_or_tracking_id: str = Field(default="AegisPay/smart-treasury-suite")
+    commit_sha_or_waybill: str = Field(default="4a9f3b18c72e9d0e")
+    tests_passed: bool
+    passed_count: int = 42
+    failed_count: int = 0
+
+
+class AuditEventDTO(BaseModel):
+    id: str
+    timestamp: str = Field(..., description="ISO-8601 UTC formatted timestamp")
+    event_type: str = Field(..., description="'ESCROW_CREATED' | 'WEBHOOK_VERIFIED' | 'ESCROW_SETTLED' | 'FIREWALL_BLOCKED' | 'ONCHAIN_REVERT' | 'POLICY_SYNC'")
+    severity: str = Field(..., description="'INFO' | 'SUCCESS' | 'WARNING' | 'CRITICAL'")
+    summary: str
+    tx_hash: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+# --- Vault & Policy Schemas (Legacy / Compatibility) ---
 
 class PolicyState(BaseModel):
     agent: str = Field(..., description="Authorized AI agent session key address")

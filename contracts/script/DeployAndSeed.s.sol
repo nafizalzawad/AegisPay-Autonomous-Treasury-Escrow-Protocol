@@ -51,9 +51,10 @@ contract DeployAndSeed is Script {
         MilestoneEscrow escrow = new MilestoneEscrow(address(mockUsdc));
         console.log("MilestoneEscrow deployed at:", address(escrow));
 
-        // 4. Mint 25,000 USDC to AegisVault
-        mockUsdc.mint(address(vault), 25_000 * 1e6);
-        console.log("Minted 25,000 USDC to AegisVault");
+        // 4. Mint 24,880 USDC to AegisVault so after Escrow #1 (800 USDC funded, 120 USDC tax withheld)
+        // total balance is 24,200 USDC (24,080 operating + 120 tax reserve)
+        mockUsdc.mint(address(vault), 24_880 * 1e6);
+        console.log("Minted 24,880 USDC to AegisVault");
 
         // 5. Configure SessionKeyPolicy for AI Agent Account #1
         vault.configureSessionKey(
