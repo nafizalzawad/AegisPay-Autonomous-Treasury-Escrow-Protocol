@@ -118,7 +118,6 @@ def test_verify_webhook_passing_ci_settles_and_splits_tax():
     Verifies settled == True, contractor_payout_usdc == 1020.0, tax_withheld_usdc == 180.0,
     Contractor balance increased by 1020.0, and Vault tax_reserve increased from 120.0 to 300.0.
     """
-    # Fetch initial balances before settlement
     state_before = client.get("/api/v1/vault/state").json()
     initial_contractor_bal = state_before["contractor_balance_usdc"]
     initial_tax_reserve = state_before["tax_reserve_balance_usdc"]
@@ -143,7 +142,6 @@ def test_verify_webhook_passing_ci_settles_and_splits_tax():
     assert body["contractor_payout_usdc"] == 1020.0
     assert body["tax_withheld_usdc"] == 180.0
 
-    # Fetch updated balances after settlement
     state_after = client.get("/api/v1/vault/state").json()
     assert state_after["tax_reserve_balance_usdc"] == initial_tax_reserve + 180.0
     assert state_after["tax_reserve_balance_usdc"] == 300.0
@@ -165,7 +163,6 @@ def test_create_escrow_exceeding_per_tx_cap_reverts():
     detail = res.json()
     assert "PerTxSpendLimitExceeded" in str(detail)
 
-    # Check audit log for ONCHAIN_REVERT event
     audit_res = client.get("/api/v1/vault/audit-log")
     assert audit_res.status_code == 200
     logs = audit_res.json()
@@ -175,7 +172,143 @@ def test_create_escrow_exceeding_per_tx_cap_reverts():
 
 
 # =========================================================================
-# ADDITIONAL QA & REGRESSION TESTS
+# PHASE 3: AI BRAIN, 2-STAGE FIREWALL & RED-TEAM TESTS
+# =========================================================================
+
+def test_intent_parse_and_simulate_valid_escrow():
+    """8. Sends natural language prompt:
+    'Create a 1,200 USDC milestone escrow for DevStudio with 15% tax withholding; release when GitHub CI tests pass',
+    execute_immediately=False.
+    Verifies overall_approved == True, stage1_offchain_passed == True, stage2_onchain_simulation_passed == True,
+    amount_usdc == 1200.0, tax_withholding_bps == 1500.
+    """
+    prompt = "Create a 1,200 USDC milestone escrow for DevStudio with 15% tax withholding; release when GitHub CI tests pass"
+    res = client.post(
+        "/api/v1/intent/parse-and-simulate",
+        json={"prompt": prompt, "execute_immediately": False},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is True
+    parsed = body["parsed_intent"]
+    assert parsed["amount_usdc"] == 1200.0
+    assert parsed["tax_withholding_bps"] == 1500
+    assert parsed["action_type"] == "CREATE_ESCROW"
+    assert parsed["recipient_address"].lower() == settings.CONTRACTOR_ADDRESS.lower()
+
+    fw = body["firewall"]
+    assert fw["overall_approved"] is True
+    assert fw["stage1_offchain_passed"] is True
+    assert fw["stage2_onchain_simulation_passed"] is True
+    assert fw["evm_simulation_status"] == "SUCCESS"
+    assert fw["evm_revert_reason"] is None
+    assert fw["risk_level"] == "LOW"
+    assert body["executed"] is False
+
+
+def test_intent_parse_and_execute_escrow_end_to_end():
+    """9. Same natural language prompt with execute_immediately=True.
+    Verifies executed == True, valid tx_hash, and new FUNDED escrow on-chain.
+    """
+    prompt = "Create a 1,200 USDC milestone escrow for DevStudio with 15% tax withholding; release when GitHub CI tests pass"
+    res = client.post(
+        "/api/v1/intent/parse-and-simulate",
+        json={"prompt": prompt, "execute_immediately": True},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is True
+    assert body["executed"] is True
+    assert body["tx_hash"] is not None
+    assert body["tx_hash"].startswith("0x")
+    assert body["escrow"] is not None
+    assert body["escrow"]["status"] == "FUNDED"
+
+
+def test_redteam_scenario_1_prompt_injection_over_limit():
+    """10. Calls POST /api/v1/security/redteam-attack with PROMPT_INJECTION_OVER_LIMIT.
+    Verifies onchain_reverted_as_expected == True, solidity_custom_error == 'PerTxSpendLimitExceeded',
+    and funds_lost_usdc == 0.0.
+    """
+    res = client.post(
+        "/api/v1/security/redteam-attack",
+        json={"scenario_id": "PROMPT_INJECTION_OVER_LIMIT", "force_onchain_execution": True},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["scenario_id"] == "PROMPT_INJECTION_OVER_LIMIT"
+    assert body["onchain_reverted_as_expected"] is True
+    assert body["solidity_custom_error"] == "PerTxSpendLimitExceeded"
+    assert body["funds_lost_usdc"] == 0.0
+    assert body["vault_balance_before_usdc"] == body["vault_balance_after_usdc"]
+    assert body["parsed_intent"]["prompt_injection_detected"] is True
+    assert len(body["parsed_intent"]["injection_indicators"]) > 0
+
+
+def test_redteam_scenario_2_unwhitelisted_phishing_recipient():
+    """11. Calls POST /api/v1/security/redteam-attack with UNWHITELISTED_PHISHING_RECIPIENT.
+    Verifies onchain_reverted_as_expected == True, solidity_custom_error == 'RecipientNotWhitelisted',
+    and funds_lost_usdc == 0.0.
+    """
+    res = client.post(
+        "/api/v1/security/redteam-attack",
+        json={"scenario_id": "UNWHITELISTED_PHISHING_RECIPIENT", "force_onchain_execution": True},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["scenario_id"] == "UNWHITELISTED_PHISHING_RECIPIENT"
+    assert body["onchain_reverted_as_expected"] is True
+    assert body["solidity_custom_error"] == "RecipientNotWhitelisted"
+    assert body["funds_lost_usdc"] == 0.0
+    assert body["vault_balance_before_usdc"] == body["vault_balance_after_usdc"]
+
+
+def test_redteam_scenario_3_malicious_infinite_approve():
+    """12. Calls POST /api/v1/security/redteam-attack with MALICIOUS_INFINITE_APPROVE.
+    Verifies onchain_reverted_as_expected == True, solidity_custom_error == 'FunctionSelectorNotAllowed',
+    and funds_lost_usdc == 0.0.
+    """
+    res = client.post(
+        "/api/v1/security/redteam-attack",
+        json={"scenario_id": "MALICIOUS_INFINITE_APPROVE", "force_onchain_execution": True},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["scenario_id"] == "MALICIOUS_INFINITE_APPROVE"
+    assert body["onchain_reverted_as_expected"] is True
+    assert body["solidity_custom_error"] == "FunctionSelectorNotAllowed"
+    assert body["funds_lost_usdc"] == 0.0
+    assert body["vault_balance_before_usdc"] == body["vault_balance_after_usdc"]
+
+
+def test_reset_demo_restores_clean_state():
+    """13. Calls POST /api/v1/vault/reset-demo and verifies vault balances and escrow count return to initial values."""
+    res = client.post("/api/v1/vault/reset-demo")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ok"] is True
+
+    # Check vault state
+    vault_res = client.get("/api/v1/vault/state")
+    assert vault_res.status_code == 200
+    v = vault_res.json()
+    assert v["total_balance_usdc"] == 24200.0
+    assert v["operating_balance_usdc"] == 24080.0
+    assert v["tax_reserve_balance_usdc"] == 120.0
+    assert v["policy"]["spent_today_usdc"] == 0.0
+    assert v["policy"]["remaining_daily_usdc"] == 3000.0
+
+    # Check escrows count is reset to 1
+    escrows_res = client.get("/api/v1/escrows")
+    assert escrows_res.status_code == 200
+    escrows = escrows_res.json()
+    assert len(escrows) == 1
+    assert escrows[0]["escrow_id"] == 1
+    assert escrows[0]["status"] == "SETTLED"
+
+
+# =========================================================================
+# LEGACY COMPATIBILITY & REGRESSION TESTS
 # =========================================================================
 
 def test_intent_parse_deterministic():

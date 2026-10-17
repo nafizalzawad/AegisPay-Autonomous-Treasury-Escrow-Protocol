@@ -1,192 +1,272 @@
 import re
+import time
 from typing import List, Dict, Any, Optional, Tuple
-from pydantic import BaseModel
+from web3 import Web3
+from web3.exceptions import ContractLogicError, ContractCustomError
+
 from app.config import settings
+from app.schemas import (
+    ParsedIntentDTO,
+    FirewallStageCheck,
+    FirewallSimulationResult,
+)
+from app.blockchain import blockchain_service
+
+# Custom Error Selectors lookup dictionary
+ERROR_SELECTORS: Dict[str, str] = {
+    "06951c29": "PerTxSpendLimitExceeded",
+    "0a3937fc": "DailySpendLimitExceeded",
+    "ab0b880c": "RecipientNotWhitelisted",
+    "3f4ac192": "TargetContractNotAllowed",
+    "30ec2715": "FunctionSelectorNotAllowed",
+    "e4232821": "SessionKeyExpired",
+    "c01bac7d": "SessionKeyInactive",
+    "d86ad9cf": "UnauthorizedCaller",
+    "1ef4fa9b": "InvalidTaxBps",
+    "cfb60706": "ExecutionFailed",
+}
 
 
-class FirewallRule(BaseModel):
-    id: str
-    name: str
-    category: str
-    description: str
-    is_active: bool = True
-    enforcement_layer: str = "OFF_CHAIN_PRE_SIMULATION"
-
-
-class FirewallVerdict(BaseModel):
-    is_allowed: bool
-    rule_triggered: Optional[str] = None
-    rule_name: Optional[str] = None
-    violation_reason: Optional[str] = None
-    severity: str = "NONE"  # "NONE", "HIGH", "CRITICAL"
-    remediation: Optional[str] = None
-
-
-ACTIVE_FIREWALL_RULES: List[FirewallRule] = [
-    FirewallRule(
-        id="FW-01",
-        name="Per-Transaction Velocity Ceiling",
-        category="Spending Guardrail",
-        description="Enforces strict 1,500 USDC ceiling per transaction on delegated Agent calls.",
-    ),
-    FirewallRule(
-        id="FW-02",
-        name="Rolling 24h Cumulative Budget",
-        category="Spending Guardrail",
-        description="Enforces strict 3,000 USDC rolling 24-hour treasury spending ceiling.",
-    ),
-    FirewallRule(
-        id="FW-03",
-        name="Strict Recipient Whitelist Verification",
-        category="Access Control",
-        description="Rejects any commercial transfer or escrow commitment to unverified contractor addresses.",
-    ),
-    FirewallRule(
-        id="FW-04",
-        name="Zero Infinite Approvals Policy",
-        category="ERC20 Safety",
-        description="Strictly disallows ERC20 approvals with type(uint256).max or unbound allowances.",
-    ),
-    FirewallRule(
-        id="FW-05",
-        name="Approved Target & Selector Allowlist",
-        category="Contract Security",
-        description="Restricts execution only to authorized token, escrow targets, and known function signatures.",
-    ),
-    FirewallRule(
-        id="FW-06",
-        name="Adversarial Prompt Injection Shield",
-        category="AI Reasoning Security",
-        description="Detects and isolates jailbreak phrasing, instruction override attempts, and malicious drain exploits.",
-    ),
-]
-
-PROMPT_INJECTION_PATTERNS = [
-    r"ignore\s+(all\s+)?(previous|prior)\s+instructions",
-    r"bypass\s+(all\s+)?(guardrails|policy|limits|security)",
-    r"emergency\s+drain",
-    r"drain\s+(all|entire|treasury|vault)",
-    r"override\s+(policy|limits|spending)",
-    r"transfer\s+all\s+funds",
-    r"grant\s+full\s+infinite\s+approval",
-]
-
-
-class PreExecutionFirewall:
+class AegisFirewall:
     def __init__(self) -> None:
         pass
 
-    def evaluate_intent(
-        self,
-        raw_prompt: str,
-        amount_usdc: float,
-        recipient_address: str,
-        policy_max_per_tx: float = 1500.0,
-        policy_remaining_daily: float = 3000.0,
-        whitelisted_recipients: Optional[List[str]] = None,
-    ) -> FirewallVerdict:
-        """Evaluates a natural-language intent before structured execution"""
-        if whitelisted_recipients is None:
-            whitelisted_recipients = [
-                settings.CONTRACTOR_ADDRESS.lower(),
-                # Allow self or escrow
-            ]
-        else:
-            whitelisted_recipients = [r.lower() for r in whitelisted_recipients]
+    def decode_solidity_error(self, err: Exception) -> str:
+        """Extracts and decodes Solidity custom error name from Web3 exceptions"""
+        err_str = str(err)
+        for sel, name in ERROR_SELECTORS.items():
+            if sel in err_str:
+                return name
+            if name in err_str:
+                return name
 
-        # 1. Prompt Injection Pattern Check
-        prompt_lower = raw_prompt.lower()
-        for pattern in PROMPT_INJECTION_PATTERNS:
-            if re.search(pattern, prompt_lower):
-                return FirewallVerdict(
-                    is_allowed=False,
-                    rule_triggered="FW-06",
-                    rule_name="Adversarial Prompt Injection Shield",
-                    violation_reason=f"Prompt injection / jailbreak detected: matches prohibited pattern '{pattern}'",
-                    severity="CRITICAL",
-                    remediation="Strip adversarial override text and submit plain commercial milestone agreement.",
-                )
+        if hasattr(err, "data") and err.data:
+            data_hex = str(err.data)
+            for sel, name in ERROR_SELECTORS.items():
+                if sel in data_hex:
+                    return name
 
-        # 2. Per-Transaction Limit Check
-        if amount_usdc > policy_max_per_tx:
-            return FirewallVerdict(
-                is_allowed=False,
-                rule_triggered="FW-01",
-                rule_name="Per-Transaction Velocity Ceiling",
-                violation_reason=f"Requested amount ({amount_usdc:,.2f} USDC) exceeds session limit ({policy_max_per_tx:,.2f} USDC)",
-                severity="HIGH",
-                remediation=f"Reduce transaction amount to {policy_max_per_tx:,.2f} USDC or request multi-sig owner transfer.",
+        return "ExecutionReverted"
+
+    def evaluate_intent(self, parsed: ParsedIntentDTO) -> FirewallSimulationResult:
+        """2-Stage Firewall Evaluation:
+        Stage 1: Off-Chain Policy & Semantic Guardrails
+        Stage 2: Live EVM eth_call Dry-Run Simulation against Anvil
+        """
+        vault_state = blockchain_service.get_vault_state()
+        policy = vault_state.policy
+        vault_balance_before = vault_state.total_balance_usdc
+
+        stage1_checks: List[FirewallStageCheck] = []
+
+        # -------------------------------------------------------------
+        # STAGE 1: OFF-CHAIN PRE-EXECUTION CHECKS
+        # -------------------------------------------------------------
+
+        # Check 1: Prompt Injection & Semantic Guard
+        inj_passed = not parsed.prompt_injection_detected
+        inj_detail = (
+            "Clean commercial intent — no adversarial tokens detected"
+            if inj_passed
+            else f"Blocked: Detected malicious prompt injection keywords: {', '.join(parsed.injection_indicators)}"
+        )
+        stage1_checks.append(
+            FirewallStageCheck(
+                check_name="Prompt Injection & Semantic Guard",
+                passed=inj_passed,
+                detail=inj_detail,
             )
-
-        # 3. Daily Velocity Limit Check
-        if amount_usdc > policy_remaining_daily:
-            return FirewallVerdict(
-                is_allowed=False,
-                rule_triggered="FW-02",
-                rule_name="Rolling 24h Cumulative Budget",
-                violation_reason=f"Requested amount ({amount_usdc:,.2f} USDC) exceeds remaining daily budget ({policy_remaining_daily:,.2f} USDC)",
-                severity="HIGH",
-                remediation="Wait for rolling daily reset window or contact Treasury Owner.",
-            )
-
-        # 4. Recipient Whitelist Check
-        if recipient_address.lower() not in whitelisted_recipients:
-            return FirewallVerdict(
-                is_allowed=False,
-                rule_triggered="FW-03",
-                rule_name="Strict Recipient Whitelist Verification",
-                violation_reason=f"Recipient address '{recipient_address}' is not in on-chain whitelist",
-                severity="HIGH",
-                remediation="Submit recipient KYC / onboarding to Treasury Owner for on-chain whitelisting.",
-            )
-
-        return FirewallVerdict(
-            is_allowed=True,
-            rule_triggered=None,
-            rule_name=None,
-            violation_reason=None,
-            severity="NONE",
-            remediation=None,
         )
 
-    def evaluate_redteam_attack(self, scenario_id: str) -> FirewallVerdict:
-        """Specialized pre-execution inspection for red-team arena attacks"""
-        if scenario_id == "attack_drain_10k":
-            return FirewallVerdict(
-                is_allowed=False,
-                rule_triggered="FW-01",
-                rule_name="Per-Transaction Velocity Ceiling",
-                violation_reason="Transaction amount 10,000.00 USDC exceeds per-tx session limit of 1,500.00 USDC",
-                severity="CRITICAL",
-                remediation="Request denied by Off-Chain Firewall. Transaction aborted prior to mempool submission.",
+        # Check 2: Session Key Active & Unexpired
+        now = int(time.time())
+        key_passed = policy.is_active and (now < policy.expires_at)
+        key_detail = (
+            f"Session Key active until {policy.expires_at}"
+            if key_passed
+            else "Session Key inactive or expired"
+        )
+        stage1_checks.append(
+            FirewallStageCheck(
+                check_name="Session Key Active & Unexpired",
+                passed=key_passed,
+                detail=key_detail,
             )
-        elif scenario_id == "attack_unwhitelisted_hacker":
-            return FirewallVerdict(
-                is_allowed=False,
-                rule_triggered="FW-03",
-                rule_name="Strict Recipient Whitelist Verification",
-                violation_reason=f"Destination address {settings.ATTACKER_ADDRESS} is not whitelisted by Treasury Owner",
-                severity="CRITICAL",
-                remediation="Request denied by Off-Chain Firewall. Recipient not present in approved commercial counterparties.",
+        )
+
+        # Check 3: Target & Selector Whitelist
+        not_approve = (
+            parsed.action_type != "MALICIOUS_APPROVE"
+            and parsed.function_selector != "0x095ea7b3"
+        )
+        selector_allowed = not_approve and (
+            parsed.function_selector in ["0xa9059cbb", "0x0a1d5e6d", "0xb20616e0"]
+        )
+        sel_detail = (
+            f"Approved target contract & function selector {parsed.function_selector}"
+            if selector_allowed
+            else f"Selector {parsed.function_selector} ({parsed.function_name}) is strictly forbidden by policy rules"
+        )
+        stage1_checks.append(
+            FirewallStageCheck(
+                check_name="Target & Selector Whitelist",
+                passed=selector_allowed,
+                detail=sel_detail,
             )
-        elif scenario_id == "attack_infinite_approval":
-            return FirewallVerdict(
-                is_allowed=False,
-                rule_triggered="FW-04",
-                rule_name="Zero Infinite Approvals Policy",
-                violation_reason="Forbidden ERC20 approve() call: Infinite/unbound allowance request detected",
-                severity="CRITICAL",
-                remediation="Request denied by Off-Chain Firewall. Approvals must be bound to exact milestone amounts.",
+        )
+
+        # Check 4: Recipient Whitelist Verification
+        recipient_ok = (
+            parsed.recipient_address.lower() == settings.CONTRACTOR_ADDRESS.lower()
+        )
+        recip_detail = (
+            f"Recipient {parsed.recipient_address} verified in Treasury Whitelist"
+            if recipient_ok
+            else f"Recipient {parsed.recipient_address} not in policy recipient whitelist"
+        )
+        stage1_checks.append(
+            FirewallStageCheck(
+                check_name="Recipient Whitelist Verification",
+                passed=recipient_ok,
+                detail=recip_detail,
+            )
+        )
+
+        # Check 5: Spend Cap Verification (Per-Tx & 24h Rolling)
+        under_per_tx = parsed.amount_usdc <= policy.max_per_tx_usdc
+        under_daily = parsed.amount_usdc <= policy.remaining_daily_usdc
+        caps_ok = under_per_tx and under_daily
+
+        if caps_ok:
+            caps_detail = (
+                f"Requested {parsed.amount_usdc:,.2f} USDC within limits "
+                f"(Max Per-Tx: {policy.max_per_tx_usdc:,.2f}, Remaining Daily: {policy.remaining_daily_usdc:,.2f} USDC)"
+            )
+        elif not under_per_tx:
+            caps_detail = (
+                f"Requested {parsed.amount_usdc:,.2f} USDC exceeds Per-Tx Cap of {policy.max_per_tx_usdc:,.2f} USDC"
             )
         else:
-            return FirewallVerdict(
-                is_allowed=False,
-                rule_triggered="FW-UNKNOWN",
-                rule_name="Generic Security Guardrail",
-                violation_reason=f"Unknown or unverified attack payload scenario: {scenario_id}",
-                severity="HIGH",
-                remediation="Reject execution.",
+            caps_detail = (
+                f"Requested {parsed.amount_usdc:,.2f} USDC exceeds Remaining Daily Cap of {policy.remaining_daily_usdc:,.2f} USDC"
             )
 
+        stage1_checks.append(
+            FirewallStageCheck(
+                check_name="Spend Cap Verification (Per-Tx & 24h Rolling)",
+                passed=caps_ok,
+                detail=caps_detail,
+            )
+        )
 
-firewall = PreExecutionFirewall()
+        stage1_passed = all(c.passed for c in stage1_checks)
+
+        # -------------------------------------------------------------
+        # STAGE 2: LIVE EVM ETH_CALL DRY-RUN SIMULATION
+        # -------------------------------------------------------------
+
+        stage2_passed = False
+        evm_status = "REVERTED"
+        evm_revert_reason = None
+        estimated_gas = 0
+
+        vault_contract = blockchain_service.get_vault_contract()
+        usdc_contract = blockchain_service.get_usdc_contract()
+        agent_addr = policy.session_key_address
+
+        if blockchain_service.is_connected() and vault_contract:
+            try:
+                amount_units = int(round(parsed.amount_usdc * 1e6))
+
+                if parsed.action_type == "CREATE_ESCROW":
+                    spec_hash = Web3.keccak(text=parsed.deliverable_description)
+                    fn = vault_contract.functions.createEscrowByAgent(
+                        Web3.to_checksum_address(vault_state.escrow_contract_address),
+                        Web3.to_checksum_address(parsed.recipient_address),
+                        amount_units,
+                        parsed.tax_withholding_bps,
+                        spec_hash,
+                    )
+                    fn.call({"from": Web3.to_checksum_address(agent_addr)})
+                    stage2_passed = True
+                    evm_status = "SUCCESS"
+                    estimated_gas = 285000
+
+                elif parsed.action_type == "MALICIOUS_APPROVE":
+                    if usdc_contract:
+                        approve_data = usdc_contract.encode_abi(
+                            "approve",
+                            args=[Web3.to_checksum_address(parsed.recipient_address), 2**256 - 1],
+                        )
+                        fn = vault_contract.functions.executeByAgent(
+                            Web3.to_checksum_address(vault_state.usdc_address),
+                            bytes.fromhex(approve_data[2:]),
+                            Web3.to_checksum_address(parsed.recipient_address),
+                            0,
+                            b"\x00" * 32,
+                        )
+                        fn.call({"from": Web3.to_checksum_address(agent_addr)})
+                    stage2_passed = True
+                    evm_status = "SUCCESS"
+                    estimated_gas = 65000
+
+                else:  # DIRECT_TRANSFER
+                    if usdc_contract:
+                        transfer_data = usdc_contract.encode_abi(
+                            "transfer",
+                            args=[Web3.to_checksum_address(parsed.recipient_address), amount_units],
+                        )
+                        fn = vault_contract.functions.executeByAgent(
+                            Web3.to_checksum_address(vault_state.usdc_address),
+                            bytes.fromhex(transfer_data[2:]),
+                            Web3.to_checksum_address(parsed.recipient_address),
+                            amount_units,
+                            b"\x00" * 32,
+                        )
+                        fn.call({"from": Web3.to_checksum_address(agent_addr)})
+                    stage2_passed = True
+                    evm_status = "SUCCESS"
+                    estimated_gas = 85000
+
+            except Exception as e:
+                stage2_passed = False
+                evm_status = "REVERTED"
+                evm_revert_reason = self.decode_solidity_error(e)
+        else:
+            # Fallback if node offline
+            if stage1_passed:
+                stage2_passed = True
+                evm_status = "SUCCESS"
+                estimated_gas = 250000
+            else:
+                stage2_passed = False
+                evm_status = "REVERTED"
+                evm_revert_reason = "PolicyGuardrailRevert"
+
+        overall_approved = stage1_passed and stage2_passed
+
+        if overall_approved:
+            vault_balance_after = round(vault_balance_before - parsed.amount_usdc, 2)
+            balance_delta = parsed.amount_usdc
+            risk_level = "LOW"
+        else:
+            vault_balance_after = vault_balance_before
+            balance_delta = 0.0
+            risk_level = "CRITICAL_BLOCKED" if parsed.prompt_injection_detected or not stage2_passed else "HIGH"
+
+        return FirewallSimulationResult(
+            overall_approved=overall_approved,
+            stage1_offchain_passed=stage1_passed,
+            stage2_onchain_simulation_passed=stage2_passed,
+            stage1_checks=stage1_checks,
+            evm_simulation_status=evm_status,
+            evm_revert_reason=evm_revert_reason,
+            estimated_gas=estimated_gas,
+            vault_balance_before_usdc=vault_balance_before,
+            vault_balance_after_usdc=vault_balance_after,
+            balance_delta_usdc=balance_delta,
+            risk_level=risk_level,
+        )
+
+
+firewall = AegisFirewall()

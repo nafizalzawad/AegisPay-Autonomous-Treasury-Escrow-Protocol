@@ -86,6 +86,80 @@ class AuditEventDTO(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+# --- Phase 3 Schemas: AI Brain, 2-Stage Firewall & Red-Team Engine ---
+
+class ParsedIntentDTO(BaseModel):
+    action_type: str = Field(..., description="'CREATE_ESCROW' | 'DIRECT_TRANSFER' | 'MALICIOUS_APPROVE' | 'UNKNOWN'")
+    recipient_label: str
+    recipient_address: str
+    amount_usdc: float
+    tax_withholding_bps: int = 1500
+    deliverable_description: str = ""
+    verification_source: str = "github_actions"
+    target_contract: str
+    function_selector: str
+    function_name: str
+    encoded_calldata_preview: str
+    confidence: float = 1.0
+    parser_mode: str = Field(default="deterministic_fallback", description="'llm' | 'deterministic_fallback'")
+    prompt_injection_detected: bool = False
+    injection_indicators: List[str] = Field(default_factory=list)
+
+
+class FirewallStageCheck(BaseModel):
+    check_name: str
+    passed: bool
+    detail: str
+
+
+class FirewallSimulationResult(BaseModel):
+    overall_approved: bool
+    stage1_offchain_passed: bool
+    stage2_onchain_simulation_passed: bool
+    stage1_checks: List[FirewallStageCheck] = Field(default_factory=list)
+    evm_simulation_status: str = Field(..., description="'SUCCESS' | 'REVERTED'")
+    evm_revert_reason: Optional[str] = None
+    estimated_gas: int = 0
+    vault_balance_before_usdc: float
+    vault_balance_after_usdc: float
+    balance_delta_usdc: float
+    risk_level: str = Field(..., description="'LOW' | 'HIGH' | 'CRITICAL_BLOCKED'")
+
+
+class IntentParseAndSimulateRequest(BaseModel):
+    prompt: str = Field(min_length=3, max_length=2000)
+    execute_immediately: bool = False
+
+
+class IntentParseAndSimulateResponse(BaseModel):
+    ok: bool
+    parsed_intent: ParsedIntentDTO
+    firewall: FirewallSimulationResult
+    executed: bool = False
+    tx_hash: Optional[str] = None
+    escrow: Optional[EscrowItemDTO] = None
+
+
+class RedTeamAttackRequest(BaseModel):
+    scenario_id: str
+    force_onchain_execution: bool = True
+
+
+class RedTeamAttackResponse(BaseModel):
+    scenario_id: str
+    title: str
+    adversarial_prompt: str
+    parsed_intent: ParsedIntentDTO
+    firewall: FirewallSimulationResult
+    onchain_attempt_executed: bool
+    onchain_reverted_as_expected: bool
+    solidity_custom_error: str
+    vault_balance_before_usdc: float
+    vault_balance_after_usdc: float
+    funds_lost_usdc: float
+    audit_event: AuditEventDTO
+
+
 # --- Vault & Policy Schemas (Legacy / Compatibility) ---
 
 class PolicyState(BaseModel):
@@ -217,11 +291,7 @@ class WebhookSettlementResponse(BaseModel):
     verification_summary: str
 
 
-# --- Red-Team Security Schemas ---
-
-class RedTeamAttackRequest(BaseModel):
-    scenario_id: str = Field(..., description="'attack_drain_10k', 'attack_unwhitelisted_hacker', 'attack_infinite_approval'")
-
+# --- Red-Team Security Schemas (Legacy) ---
 
 class RedTeamDefenseResponse(BaseModel):
     scenario_id: str
