@@ -133,4 +133,29 @@ If uploading files individually:
 If the portal asks for a SINGLE file upload:
   File: submission_package/AegisPay_FinTechathon_2026_Full_Package_Topic_F.zip (5.78 MB)
   (Contains all 6 items neatly arranged in numbered directories with PDFs, Markdown, and MP4 video)
+
+
+--------------------------------------------------------------------------------
+FIELD 6: TEAM MEMBERS & OFFICIAL CONTACT DETAILS
+--------------------------------------------------------------------------------
+Leader (Member 1):
+• Full Name:           Nafiz Al Zawad
+• Role:                Leader
+• Gender & Age:        Male, 23
+• Nationality:         Bangladesh
+• Passport Number:     A05280095
+• Student ID:          0432220005101041
+• University:          University of Information Technology and Sciences (UITS)
+• Major:               Computer Science and Engineering
+• Year of Study:       UG Year 4
+• Email:               0432220005101041@uits.edu.bd
+• Phone / WhatsApp:    +8801515636528
+
+Member 2:
+• Full Name:           Anona Ayshi Rozario
+• Role:                Member
+• Gender & Age:        Female, 25
+• Nationality:         Bangladesh
+• Passport Type:       Passport
+• Phone / WhatsApp:    +8801554164137
 ================================================================================

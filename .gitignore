@@ -49,9 +49,10 @@ contracts/broadcast/
 *.swp
 *.swo
 
-# OS
+# OS & Temp Office files
 .DS_Store
 Thumbs.db
+~$*
 
 # Logs & PIDs
 .logs/
