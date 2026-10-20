@@ -1,0 +1,161 @@
+{
+  "version": 1,
+  "historyId": "ea518000-94a9-442e-b941-ea9948fdb9a2",
+  "currentRevision": "c7603dd3-a553-49fd-b41e-754ce8964216",
+  "pendingChanges": false,
+  "files": {
+    "AGENTS.md": {
+      "hash": "1d4f0c8ca2507b94fd7c9df709fff01416adbd51a0f922b9d6ed2f40129147d5",
+      "content": "C:\\Users\\USER\\.cache\\hyperframes\\history\\ea518000-94a9-442e-b941-ea9948fdb9a2\\blobs\\1d\\1d4f0c8ca2507b94fd7c9df709fff01416adbd51a0f922b9d6ed2f40129147d5"
+    },
+    "CLAUDE.md": {
+      "hash": "1d4f0c8ca2507b94fd7c9df709fff01416adbd51a0f922b9d6ed2f40129147d5",
+      "content": "C:\\Users\\USER\\.cache\\hyperframes\\history\\ea518000-94a9-442e-b941-ea9948fdb9a2\\blobs\\1d\\1d4f0c8ca2507b94fd7c9df709fff01416adbd51a0f922b9d6ed2f40129147d5"
+    },
+    "assets/images/dashboard.png": {
+      "hash": "54cf89532a8f2a1c7cc8a05d856872f9c6fcb0a40dcc06bd3faeeb158b39af4c",
+      "content": "C:\\Users\\USER\\.cache\\hyperframes\\history\\ea518000-94a9-442e-b941-ea9948fdb9a2\\blobs\\54\\54cf89532a8f2a1c7cc8a05d856872f9c6fcb0a40dcc06bd3faeeb158b39af4c"
+    },
+    "assets/sfx/chime.ogg": {
+      "hash": "94b8bb5f2d43ab65e4bcc32b28562416e9bc2c51d9fd4be1e333660ee52f977f",
+      "content": "C:\\Users\\USER\\.cache\\hyperframes\\history\\ea518000-94a9-442e-b941-ea9948fdb9a2\\blobs\\94\\94b8bb5f2d43ab65e4bcc32b28562416e9bc2c51d9fd4be1e333660ee52f977f"
+    },
+    "assets/sfx/click.ogg": {
+      "hash": "59175ac17cd49a68dd736285738441287636112a84a6f7ce0d89921bda5a5360",
+      "content": "C:\\Users\\USER\\.cache\\hyperframes\\history\\ea518000-94a9-442e-b941-ea9948fdb9a2\\blobs\\59\\59175ac17cd49a68dd736285738441287636112a84a6f7ce0d89921bda5a5360"
+    },
+    "assets/sfx/key.wav": {
+      "hash": "7b873548c399b9aa0efbe63052fe1344c5317a9b23455b8be3523f47d434daf1",
+      "content": "C:\\Users\\USER\\.cache\\hyperframes\\history\\ea518000-94a9-442e-b941-ea9948fdb9a2\\blobs\\7b\\7b873548c399b9aa0efbe63052fe1344c5317a9b23455b8be3523f47d434daf1"
+    },
+    "assets/sfx/revert.ogg": {
+      "hash": "3f75b11df5b06d68d2c25fbf0e9c9d9e7dd9250562a4007ee34856b8a309a2ae",
+      "content": "C:\\Users\\USER\\.cache\\hyperframes\\history\\ea518000-94a9-442e-b941-ea9948fdb9a2\\blobs\\3f\\3f75b11df5b06d68d2c25fbf0e9c9d9e7dd9250562a4007ee34856b8a309a2ae"
+    },
+    "assets/sfx/switch.ogg": {
+      "hash": "efdd1d1e2904fb2d81259cd96bb80101caceae94be02baa4b5310714a6708b19",
+      "content": "C:\\Users\\USER\\.cache\\hyperframes\\history\\ea518000-94a9-442e-b941-ea9948fdb9a2\\blobs\\ef\\efdd1d1e2904fb2d81259cd96bb80101caceae94be02baa4b5310714a6708b19"
+    },
+    "hyperframes.json": {
+      "hash": "53dbce1e19aa713cbb12ee0bc4d206143b45ab15e6ffbfcaa8f69572d4d24d50",
+      "content": "C:\\Users\\USER\\.cache\\hyperframes\\history\\ea518000-94a9-442e-b941-ea9948fdb9a2\\blobs\\53\\53dbce1e19aa713cbb12ee0bc4d206143b45ab15e6ffbfcaa8f69572d4d24d50"
+    },
+    "index.html": {
+      "hash": "8f59e69e875ddebe00d27f048cfc446cfb26863f2db41c901ebc57601692e1b0",
+      "content": "C:\\Users\\USER\\.cache\\hyperframes\\history\\ea518000-94a9-442e-b941-ea9948fdb9a2\\blobs\\8f\\8f59e69e875ddebe00d27f048cfc446cfb26863f2db41c901ebc57601692e1b0"
+    },
+    "meta.json": {
+      "hash": "c132f1d45fc1f9a3e0d7b3fcf3c99ce4da7bfc5bf60804307c08f7e2e0203759",
+      "content": "C:\\Users\\USER\\.cache\\hyperframes\\history\\ea518000-94a9-442e-b941-ea9948fdb9a2\\blobs\\c1\\c132f1d45fc1f9a3e0d7b3fcf3c99ce4da7bfc5bf60804307c08f7e2e0203759"
+    },
+    "package.json": {
+      "hash": "5ba18dd806059c0b8bf151ce1d1670790ee945dea6f35d672f4fcc9a33667e48",
+      "content": "C:\\Users\\USER\\.cache\\hyperframes\\history\\ea518000-94a9-442e-b941-ea9948fdb9a2\\blobs\\5b\\5ba18dd806059c0b8bf151ce1d1670790ee945dea6f35d672f4fcc9a33667e48"
+    },
+    "assets/music/music.mp3": {
+      "hash": "5888d4bd2ba0119b87a94e502ae2cc401c08192945cc5e5c2f8e8a33aa47a0a1",
+      "content": "C:\\Users\\USER\\.cache\\hyperframes\\history\\ea518000-94a9-442e-b941-ea9948fdb9a2\\blobs\\58\\5888d4bd2ba0119b87a94e502ae2cc401c08192945cc5e5c2f8e8a33aa47a0a1"
+    }
+  },
+  "revisions": {
+    "c7603dd3-a553-49fd-b41e-754ce8964216": {
+      "actor": {
+        "kind": "outside",
+        "name": "Outside"
+      },
+      "label": "Changed outside the app",
+      "startedAt": 1792359191816,
+      "endedAt": 1792359191817,
+      "files": {
+        "index.html": {
+          "before": "C:\\Users\\USER\\.cache\\hyperframes\\history\\ea518000-94a9-442e-b941-ea9948fdb9a2\\blobs\\8f\\8f4d17fe5e0e3e3c0d7cd6813e4562b76840666d427164c052b6ee83c450128e",
+          "after": "C:\\Users\\USER\\.cache\\hyperframes\\history\\ea518000-94a9-442e-b941-ea9948fdb9a2\\blobs\\8f\\8f59e69e875ddebe00d27f048cfc446cfb26863f2db41c901ebc57601692e1b0"
+        }
+      }
+    }
+  },
+  "checks": {
+    "latest": {
+      "revision": "c7603dd3-a553-49fd-b41e-754ce8964216",
+      "id": "8acd949b-7480-4012-9016-8faa32cdbbf6"
+    },
+    "revisions": {
+      "c7603dd3-a553-49fd-b41e-754ce8964216": [
+        {
+          "id": "8acd949b-7480-4012-9016-8faa32cdbbf6",
+          "scope": "project",
+          "report": "F:\\Competition\\FinTechathon\\AegisPay\\brag-output\\composition\\.hyperframes\\artifacts\\checks\\8acd949b-7480-4012-9016-8faa32cdbbf6.json",
+          "metadata": {
+            "ok": true,
+            "browserSkipped": false,
+            "options": {
+              "samples": 9,
+              "atTransitions": false,
+              "maxIssues": 80,
+              "collapseStatic": true,
+              "tolerance": 2,
+              "timeout": 3000,
+              "contrast": true,
+              "strict": false,
+              "snapshots": false,
+              "browserGpuMode": "auto"
+            }
+          },
+          "createdAt": 1792359201006,
+          "contentHash": "2c4b6baf6ef90b5213862940f8b49ac2c3a5eb1edd9c679a6661d6700b4dd915",
+          "revision": "c7603dd3-a553-49fd-b41e-754ce8964216",
+          "inputFingerprint": "d89c6147f0d750bf20e8de1a029fd568e2dc5babe6561823a4068d62523fb0a0",
+          "inputScope": "local-project-files",
+          "attribution": "recorded-revision"
+        }
+      ]
+    },
+    "unversioned": [
+      {
+        "id": "640894f7-6452-4fb1-88da-607dd64f63ea",
+        "scope": "project",
+        "report": "F:\\Competition\\FinTechathon\\AegisPay\\brag-output\\composition\\.hyperframes\\artifacts\\checks\\640894f7-6452-4fb1-88da-607dd64f63ea.json",
+        "metadata": {
+          "ok": false,
+          "browserSkipped": false,
+          "options": {
+            "samples": 9,
+            "atTransitions": false,
+            "maxIssues": 80,
+            "collapseStatic": true,
+            "tolerance": 2,
+            "timeout": 3000,
+            "contrast": true,
+            "strict": false,
+            "snapshots": false,
+            "browserGpuMode": "auto"
+          }
+        },
+        "createdAt": 1792359074005,
+        "contentHash": "59e4e069cdc7337e51f2f42e87e318f9767691aafce765f0cf3dcf51d2b3157b",
+        "revision": null,
+        "inputFingerprint": "fe937137ba450d8c53d151758d21ed0d208eabc5badd149a4049c241ec6fe6f9",
+        "inputScope": "local-project-files",
+        "attribution": "unversioned"
+      }
+    ]
+  },
+  "snapshots": {
+    "latest": null,
+    "revisions": {},
+    "unversioned": []
+  },
+  "renders": {
+    "latest": {
+      "id": "72240f32-6236-44a9-b78e-9d1c07b97012",
+      "completedAt": 1792359279965,
+      "output": "F:\\Competition\\FinTechathon\\AegisPay\\brag-output\\brag.mp4",
+      "status": "completed",
+      "revision": "c7603dd3-a553-49fd-b41e-754ce8964216"
+    },
+    "retainedRevisions": [
+      "c7603dd3-a553-49fd-b41e-754ce8964216"
+    ]
+  },
+  "pendingArtifactCleanup": []
+}

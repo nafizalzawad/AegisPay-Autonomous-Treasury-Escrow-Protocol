@@ -23,6 +23,19 @@ Even if an attacker achieves full prompt-injection control over the LLM, **both 
 
 ---
 
+## 🏆 FinTechathon 2026 Official Submission Deliverables
+
+| Item # | Required Competition Artifact | File Location & Resource Link | Verification & Scope |
+|---|---|---|---|
+| **01** | **System Architecture & Core Algorithm Description** | [`docs/TECHNICAL_ARCHITECTURE.md`](docs/TECHNICAL_ARCHITECTURE.md) | Formal mathematical models, 5 core algorithms, pseudocode, and state machines. |
+| **02** | **Presentation Deck (PDF & Interactive)** | • [`docs/AegisPay_Presentation_Deck.pdf`](docs/AegisPay_Presentation_Deck.pdf)<br>• [`docs/presentation_deck.html`](docs/presentation_deck.html)<br>• [`docs/PRESENTATION_DECK.md`](docs/PRESENTATION_DECK.md) | 11-slide champion deck, 9m30s verbal script, Swiss architectural styling, and judge Q&A defense. |
+| **03** | **Demonstration Video** | • [`brag-output/brag.mp4`](brag-output/brag.mp4)<br>• [`brag-output/brag.jpg`](brag-output/brag.jpg) | 50.0s 1080p 30fps high-density video demonstrating all 4 demo-critical flows. |
+| **04** | **Complete Source Code & Dependencies** | [GitHub Repository](https://github.com/nafizalzawad/AegisPay-Autonomous-Treasury-Escrow-Protocol.git) | Complete monorepo with smart contracts, FastAPI engine, React frontend, and CI pipeline. |
+| **05** | **Security Self-Assessment Report** | [`docs/SECURITY_SELF_ASSESSMENT.md`](docs/SECURITY_SELF_ASSESSMENT.md) | 4-tier permission matrix, RBAC table, defense-in-depth pipeline, and 8-item known-risk list. |
+| **06** | **Execution Evidence & Audit Trail** | [`docs/EXECUTION_EVIDENCE.md`](docs/EXECUTION_EVIDENCE.md) | Real on-chain tx hashes, block numbers, gas usage, invariant ledger, and red-team revert proofs. |
+
+---
+
 ## 2. Topic F Evaluation Rubric & Codebase Mapping
 
 | Challenge Rubric Area | Institutional Implementation in AegisPay | Concrete Codebase References |
@@ -89,8 +102,8 @@ flowchart TD
 ### Start Stack with One Command
 ```bash
 # Clone the repository
-git clone https://github.com/AegisPay/aegispay.git
-cd aegispay
+git clone https://github.com/nafizalzawad/AegisPay-Autonomous-Treasury-Escrow-Protocol.git
+cd AegisPay-Autonomous-Treasury-Escrow-Protocol
 
 # Spin up local Anvil, deploy & seed contracts, boot FastAPI relayer and React dashboard
 make demo

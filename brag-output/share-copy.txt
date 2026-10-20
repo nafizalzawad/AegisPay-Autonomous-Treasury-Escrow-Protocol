@@ -1,0 +1,2 @@
+AegisPay: Autonomous On-Chain Smart Treasury & Milestone Escrow Protocol.
+Decoupling probabilistic AI reasoning from deterministic Solidity session-key guardrails to guarantee mathematical solvency and zero balance loss. Built for the 2026 Shenzhen International FinTechathon (Topic F: Agent Wallet). Live demo: https://aegispay-sigma.vercel.app/
