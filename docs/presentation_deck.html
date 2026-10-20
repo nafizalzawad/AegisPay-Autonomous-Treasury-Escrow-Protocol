@@ -524,18 +524,42 @@
     }
 
     /* ==========================================================================
-       PRINT-TO-PDF STYLES (EXACT 16:9 SLIDES ON CTRL+P)
+       RESPONSIVE ADAPTATION FOR LAPTOP & ULTRA-WIDE SCREENS
        ========================================================================== */
+    @media (max-height: 900px) {
+      .deck-viewport { padding: 16px 40px; }
+      .slide { padding: 32px 48px; max-height: 760px; }
+      .slide-title { font-size: 32px; }
+      .slide-subtitle { font-size: 16px; }
+      .card-title { font-size: 18px; }
+      .card-text { font-size: 13px; }
+      .slide-body { margin: 18px 0; }
+    }
+    @media (max-width: 1400px) {
+      .deck-viewport { padding: 16px 24px; }
+      .slide { padding: 28px 36px; }
+      .slide-title { font-size: 30px; }
+      .grid-3col { gap: 16px; }
+      .grid-4col { gap: 12px; }
+    }
+
+    /* ==========================================================================
+       PRINT-TO-PDF STYLES (EXACT 16:9 SLIDES ON CTRL+P & CHROME CLI)
+       ========================================================================== */
+    @page {
+      size: 1920px 1080px;
+      margin: 0;
+    }
     @media print {
-      @page {
-        size: 1920px 1080px landscape;
-        margin: 0;
-      }
-      body {
-        background: #020617 !important;
+      html, body {
+        background: #030712 !important;
         width: 1920px !important;
         height: auto !important;
         overflow: visible !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
       .viewport-grid, .viewport-glow, .deck-header, .deck-footer, .speaker-drawer {
         display: none !important;
@@ -543,20 +567,27 @@
       .deck-viewport {
         position: static !important;
         padding: 0 !important;
+        margin: 0 !important;
         display: block !important;
       }
       .slide {
         display: flex !important;
         width: 1920px !important;
         height: 1080px !important;
-        max-width: none !important;
-        max-height: none !important;
+        min-width: 1920px !important;
+        max-width: 1920px !important;
+        min-height: 1080px !important;
+        max-height: 1080px !important;
         border-radius: 0 !important;
         border: none !important;
         page-break-after: always !important;
+        break-after: page !important;
         page-break-inside: avoid !important;
-        padding: 60px 80px !important;
+        break-inside: avoid !important;
+        padding: 48px 64px !important;
         box-shadow: none !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
       }
     }
   </style>
@@ -624,6 +655,13 @@
             <p class="card-text">
               Autonomous AI agents provide probabilistic reasoning and perception off-chain; Solidity smart accounts enforce immutable mathematical guardrails on-chain.
             </p>
+            <div class="metric-row">
+              <div>
+                <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-dim);">EXECUTION ARCHITECTURE</div>
+                <div style="font-family:var(--font-mono); font-size:14px; color:var(--accent-cyan); font-weight:700;">ERC-4337 Smart Account</div>
+              </div>
+            </div>
+            <div class="card-code">&gt; AegisVault.validateUserOp(...)</div>
           </div>
           <div class="surface-card highlight-emerald">
             <div class="card-label"><span>02 / SOLVENCY PROOF</span><span>SECURITY</span></div>
@@ -631,6 +669,13 @@
             <p class="card-text">
               Active Session Key policies enforce 1,500 USDC per-tx caps, 3,000 USDC daily velocity, recipient allowlists, and a strict ban on ERC-20 infinite approvals.
             </p>
+            <div class="metric-row">
+              <div>
+                <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-dim);">PER-TX CAP / DAILY VELOCITY</div>
+                <div style="font-family:var(--font-mono); font-size:14px; color:var(--accent-emerald); font-weight:700;">$1,500 / $3,000 USDC</div>
+              </div>
+            </div>
+            <div class="card-code">&gt; revert PerTxSpendLimitExceeded(...)</div>
           </div>
           <div class="surface-card highlight-rose">
             <div class="card-label"><span>03 / COMPLIANCE</span><span>ENTERPRISE</span></div>
@@ -638,6 +683,13 @@
             <p class="card-text">
               Automatic 15% statutory withholding on every milestone settlement. 85% disburses to contractor, 15% locks into an agent-inaccessible Vault Tax Reserve.
             </p>
+            <div class="metric-row">
+              <div>
+                <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-dim);">DISBURSEMENT ALLOCATION</div>
+                <div style="font-family:var(--font-mono); font-size:14px; color:#f87171; font-weight:700;">85% Net Payout / 15% Tax Reserve</div>
+              </div>
+            </div>
+            <div class="card-code">&gt; taxReserveBalance (Locked)</div>
           </div>
         </div>
       </div>
