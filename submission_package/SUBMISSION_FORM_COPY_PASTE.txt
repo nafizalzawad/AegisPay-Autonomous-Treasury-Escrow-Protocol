@@ -157,5 +157,11 @@ Member 2:
 • Gender & Age:        Female, 25
 • Nationality:         Bangladesh
 • Passport Type:       Passport
+• Passport Number:     A05592099
+• Student ID:          0432220005101011
+• University:          University of Information Technology and Sciences (UITS)
+• Major:               Computer Science and Engineering
+• Year of Study:       UG Year 4
+• Email:               0432220005101011@uits.edu.bd
 • Phone / WhatsApp:    +8801554164137
 ================================================================================
