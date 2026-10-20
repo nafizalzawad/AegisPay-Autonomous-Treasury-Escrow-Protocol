@@ -1,0 +1,136 @@
+================================================================================
+2026 SHENZHEN INTERNATIONAL FINTECH COMPETITION (FINTECHATHON)
+OFFICIAL SUBMISSION FORM — COPY-PASTE READY INFORMATION
+================================================================================
+HOSTED BY: Tsinghua University PBC School of Finance & WeBank
+TRACK:     International Track
+TOPIC:     Topic F: Agent Wallet (Autonomous On-Chain Wallet)
+DEADLINE:  October 20, 2026, 23:59 (Beijing Time, UTC+8)
+================================================================================
+
+--------------------------------------------------------------------------------
+FIELD 1: PROJECT TITLE & GENERAL METADATA
+--------------------------------------------------------------------------------
+Project Name:
+AegisPay
+
+Sub-Title / One-Line Summary:
+Autonomous On-Chain Smart Treasury & Milestone Escrow Protocol
+
+One-Sentence Value Proposition:
+AegisPay decouples probabilistic AI reasoning from deterministic on-chain execution, enabling autonomous treasury and milestone escrow disbursements while mathematically guaranteeing zero balance loss under prompt injection or adversarial attack.
+
+Target Track & Topic:
+International Track — Topic F: Agent Wallet (Autonomous On-Chain Wallet)
+
+Target Industry Alignment:
+Cross-Border SME Commercial Trade Finance, Contractor Milestone Settlements, Corporate Withholding Tax Compliance, WeBank / FISCO BCOS Enterprise Consortium Chains.
+
+
+--------------------------------------------------------------------------------
+FIELD 2: PROJECT LINKS
+--------------------------------------------------------------------------------
+GitHub Repository (Open-Source Code):
+https://github.com/nafizalzawad/AegisPay-Autonomous-Treasury-Escrow-Protocol.git
+
+Live Interactive Web Demo (Production Deployment):
+https://aegispay-sigma.vercel.app/
+
+Demo Video (Direct MP4 / Stream):
+File: 03_Demo_Video_AegisPay_1080p.mp4 (4.3 MB, 50.0s, 1080p 30fps)
+Local Path: submission_package/03_Demo_Video/03_Demo_Video_AegisPay_1080p.mp4
+
+
+--------------------------------------------------------------------------------
+FIELD 3: EXECUTIVE SUMMARY (FOR TEXT BOX SUBMISSION)
+--------------------------------------------------------------------------------
+While LLMs excel at parsing complex, unstructured commercial agreements and verifying real-world perceptual delivery webhooks (e.g. GitHub CI/CD test runs or logistics waybills), granting an AI agent direct custody of private keys creates catastrophic financial vulnerability: prompt injections, rogue token approvals, velocity drains, and tax non-compliance.
+
+AegisPay solves this by enforcing an institutional Separation of Powers:
+1. Probabilistic Perception Off-Chain: An AI Agent engine ingests natural-language contracts, simulates proposed transactions through an ephemeral EVM state-fork dry run, and computes SHA-256 cryptographic attestation hashes upon delivery verification.
+2. Deterministic Execution On-Chain: An ERC-4337 smart account (AegisVault.sol) and MilestoneEscrow.sol mathematically bound agent execution via an immutable SessionKeyPolicy ($1,500 USDC per-tx cap, $3,000 USDC rolling 24h velocity cap, recipient allowlist, and a strict bytecode ban on ERC-20 approve()).
+3. Automated Regulatory Tax Withholding: Upon milestone settlement, 85% is disbursed to the contractor while 15% is atomically withheld into an isolated Vault Tax Reserve sub-account, locked against AI agent withdrawals.
+
+Under live red-team adversarial attacks (prompt injection $10,000 drain, phishing wallet transfer, malicious infinite approve), the protocol deterministically reverts on-chain with exact custom errors (PerTxSpendLimitExceeded, RecipientNotWhitelisted, FunctionSelectorNotAllowed), achieving a proven $0.00 balance loss.
+
+
+--------------------------------------------------------------------------------
+FIELD 4: ON-CHAIN EXECUTION EVIDENCE & TRANSACTION HASHES (CHECKLIST ITEM 06)
+--------------------------------------------------------------------------------
+Environment: EVM Testbed / Local Consortium Mode (Chain ID: 31337)
+Solidity Version: 0.8.24 | OpenZeppelin v5.0.2
+
+Core Protocol Deployments:
+• MockUSDC:        0x47c05bcca7d57c87083eb4e586007530ee4539e9
+  Deployment Tx:   0xb7ab1ca2c374248321dc24dbb23d12cef7fc7ed42f6e3d4ef4a78e1436128dde (Gas: 642,606)
+• AegisVault:      0x408f924baec71cc3968614cb2c58e155a35e6890
+  Deployment Tx:   0xe0007e76d66c933d8066e71f31869cdd27682805296dbf7028bccf97b964fc0f (Gas: 2,223,287)
+• MilestoneEscrow: 0x773330693cb7d5d233348e25809770a32483a940
+  Deployment Tx:   0x2b78d56a2ef78981f7e7aff27b2433ea953b027b10b31a547747dce9d05b8499 (Gas: 1,133,831)
+
+Policy Provisioning & Initial Setup Hashes:
+• Initial Mint (24,880 USDC):
+  0x3e4e8d1f29ff7ce78e6756f198844ce1379227ab9047fede8257604a0ffdeb31 (Gas: 70,597)
+• Session Key Authorization ($1,500/tx, $3,000/day):
+  0x8cc986af4a3a539ac816d4995d047b04c09ac2f3c1196bfacd19f77cf5d4dd4a (Gas: 162,518)
+• Contractor Allowlist Provisioning (DevStudio 0x3C44...93BC):
+  0xde255f6c02a05ef8e58207ca2a7f9a4f5cc387b0c43053a640e80b1e63557cbe (Gas: 66,155)
+• Target Selector Whitelisting (transfer, createEscrow, releaseMilestone):
+  Tx 1: 0xae074ef21c2b0dec477f1ec5be7327175c75643ecd8449ace22f6983174a5308 (Gas: 67,024)
+  Tx 2: 0xea4f946f8df32c7cf61d4361c99480e78bf61120f83e236ed20ceee429b19d68 (Gas: 70,985)
+  Tx 3: 0xc137486f57024cfb05ad0ea91f1ba3eee3ba096a88a7819a2c7346ae23460506 (Gas: 70,985)
+
+Autonomous Milestone Escrow Proofs:
+• Escrow #1 Creation ($800 USDC):
+  Tx Hash: 0x08219d0d5240f6153b685ad7cf615b650903eb9d36f94eb5078dd4d15fc11174
+• Escrow #1 Settlement (Attestation Hash: 0xe68e...b97d):
+  Tx Hash: 0x3ec6412f169b1499f7a9a0403e38b35fdee6cc5152738ffc1526d4410d2e3660
+  Distribution: $680.00 USDC to DevStudio + $120.00 USDC to Tax Reserve
+• Escrow #2 Creation ($1,200 USDC via Delegated Session Key):
+  Tx Hash: 0x4a18b76df91278c66802e8bc1a35418b72e7cc3215f9b45610ec17e07e8bb6ad (Gas: 395,840)
+• Escrow #2 Settlement (SHA-256 Attestation: 0x8d5c...092a):
+  Tx Hash: 0x7b58392cf99a801e00259b1f7a81057e937d949ac1a41e9b28a44c776412f901 (Gas: 184,290)
+  Distribution: $1,020.00 USDC to DevStudio + $180.00 USDC to Tax Reserve
+
+Red-Team Adversarial Revert Verification (Zero Loss):
+• Attack #1 (Prompt Injection $10,000 Drain):
+  Reverted with custom error: PerTxSpendLimitExceeded(10000000000, 1500000000) [0x06951c29] -> Loss: $0.00
+• Attack #2 (Phishing to Hacker 0xa0Ee...9720):
+  Reverted with custom error: RecipientNotWhitelisted(0xa0Ee7A142d267C1f36714E4a8F75612F20a79720) [0xab0b880c] -> Loss: $0.00
+• Attack #3 (Infinite ERC-20 approve()):
+  Reverted with custom error: FunctionSelectorNotAllowed(0x095ea7b3) [0x30ec2715] -> Loss: $0.00
+
+
+--------------------------------------------------------------------------------
+FIELD 5: FILE UPLOAD MAPPING (CHECKLIST ITEMS 01 TO 06)
+--------------------------------------------------------------------------------
+If uploading files individually:
+[Item 01] Technical Documentation:
+  File: submission_package/01_Technical_Documentation/01_Technical_Documentation_AegisPay.pdf
+  Format: PDF (A4 Portrait, Swiss layout, formal algorithm equations and pseudocode)
+
+[Item 02] Presentation Deck:
+  File: submission_package/02_Presentation_Deck/02_Presentation_Deck_AegisPay_16x9.pdf
+  Format: PDF (16:9 Landscape Widescreen, 11 slides, ~9m30s speech, vector typography)
+
+[Item 03] Demonstration Video:
+  File: submission_package/03_Demo_Video/03_Demo_Video_AegisPay_1080p.mp4
+  Format: MP4 (H.264/AAC, 1080p, 50.0 seconds, 4.3 MB, covers all 4 critical demo flows)
+
+[Item 04] Source Code:
+  File: submission_package/04_Source_Code/04_Source_Code_AegisPay.zip
+  Format: ZIP archive (clean build, contracts, backend, frontend, scripts, and tests)
+  AND GitHub Link: https://github.com/nafizalzawad/AegisPay-Autonomous-Treasury-Escrow-Protocol.git
+
+[Item 05] Security Self-Assessment Report:
+  File: submission_package/05_Security_Self_Assessment_Report/05_Security_Self_Assessment_Report_AegisPay.pdf
+  Format: PDF (4-tier permission matrix, 10-method RBAC table, 8-part known-risk list RSK-01 to RSK-08)
+
+[Item 06] Execution Evidence:
+  File: submission_package/06_Execution_Evidence/06_Execution_Evidence_AegisPay.pdf
+  Format: PDF (real on-chain tx hashes, gas metrics, conservation-of-value balance sheets, and revert proofs)
+
+If the portal asks for a SINGLE file upload:
+  File: submission_package/AegisPay_FinTechathon_2026_Full_Package_Topic_F.zip (5.78 MB)
+  (Contains all 6 items neatly arranged in numbered directories with PDFs, Markdown, and MP4 video)
+================================================================================

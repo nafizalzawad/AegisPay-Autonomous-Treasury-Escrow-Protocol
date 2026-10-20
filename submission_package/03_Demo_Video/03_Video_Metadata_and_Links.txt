@@ -1,0 +1,22 @@
+Project: AegisPay — Autonomous On-Chain Smart Treasury & Milestone Escrow Protocol
+Competition: 2026 Shenzhen International FinTech Competition (FinTechathon)
+Track: International Track | Topic: Topic F: Agent Wallet (Autonomous On-Chain Wallet)
+
+Video Specifications:
+- File: 03_Demo_Video_AegisPay_1080p.mp4
+- Duration: 50.0 seconds (well within the 5-minute competition limit)
+- Resolution: 1920x1080 (16:9 Landscape Full HD, 30fps)
+- Audio: Stereo backing music with sound effect transitions (No voiceover - text overlays only)
+- Size: ~4.3 MB
+
+Demonstrated Flows:
+1. Separation of Powers (Probabilistic AI vs. Deterministic Solidity Session Key)
+2. Natural-Language Intent to Milestone Escrow (1,200 USDC locked, 15% tax reserve)
+3. Autonomous Perception & Settlement (Simulated GitHub CI webhook -> SHA-256 attestation -> 85/15 tax split)
+4. Red-Team Adversarial Defense (Prompt injection, unwhitelisted phishing, infinite approve blocked with $0.00 loss)
+
+Live Production Web Demo URL:
+https://aegispay-sigma.vercel.app/
+
+GitHub Repository:
+https://github.com/nafizalzawad/AegisPay-Autonomous-Treasury-Escrow-Protocol.git

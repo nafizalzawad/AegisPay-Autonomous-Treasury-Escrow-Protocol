@@ -1,0 +1,15 @@
+Official GitHub Repository:
+https://github.com/nafizalzawad/AegisPay-Autonomous-Treasury-Escrow-Protocol.git
+
+Quickstart & Reproduction:
+1. Clone Repository:
+   git clone https://github.com/nafizalzawad/AegisPay-Autonomous-Treasury-Escrow-Protocol.git
+   cd AegisPay-Autonomous-Treasury-Escrow-Protocol
+
+2. Run Automated Test Suites:
+   forge test -vvv              # 19/19 Solidity unit & invariant fuzz tests
+   pytest backend/tests/test_api.py -v   # Backend API integration suite
+   python scripts/e2e_verify.py # Full-stack 10-checkpoint smoke & adversarial test
+
+3. Launch Local Demo:
+   make demo                    # Launches Anvil, seeds contracts, starts FastAPI & Vite dashboard
